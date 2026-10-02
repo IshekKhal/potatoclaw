@@ -158,19 +158,55 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Voice Toggle
-  const toggleVoice = () => {
-    isRecording = !isRecording;
-    if (isRecording) {
+  // Voice Toggle Execution (Record Voice -> Whisper Transcription -> Composer Autofill)
+  const toggleVoice = async () => {
+    if (!isRecording) {
+      isRecording = true;
       btnVoiceToggle.classList.add('recording');
       voiceIcon.textContent = '🔴';
       voiceLabel.textContent = 'Recording...';
+      if (window.__TAURI__ && window.__TAURI__.core) {
+        try {
+          await window.__TAURI__.core.invoke('start_voice_recording');
+        } catch (err) {
+          console.error('Failed to start voice recording:', err);
+          appendMessage('assistant', `Microphone capture failed: ${err}`);
+          isRecording = false;
+          btnVoiceToggle.classList.remove('recording');
+          voiceIcon.textContent = '🎤';
+          voiceLabel.textContent = 'Record Voice';
+          return;
+        }
+      }
       appendMessage('assistant', 'Microphone active (16kHz mono audio stream). Speak your prompt or task description...');
     } else {
+      isRecording = false;
       btnVoiceToggle.classList.remove('recording');
       voiceIcon.textContent = '🎤';
-      voiceLabel.textContent = 'Record Voice';
-      appendMessage('assistant', 'Voice recording captured and staged for transcription (Whisper Turbo ready).', { audio: true });
+      voiceLabel.textContent = 'Transcribing...';
+      if (window.__TAURI__ && window.__TAURI__.core) {
+        try {
+          const result = await window.__TAURI__.core.invoke('stop_voice_recording', { transcribe: true });
+          voiceLabel.textContent = 'Record Voice';
+          if (result && result.transcription && result.transcription.trim()) {
+            const transcript = result.transcription.trim();
+            const existing = composerInput.value.trim();
+            composerInput.value = existing ? `${existing} ${transcript}` : transcript;
+            appendMessage('assistant', `Transcribed: "${transcript}" (inserted into composer).`);
+          } else if (result && result.error) {
+            appendMessage('assistant', `Transcription error: ${result.error}`);
+          } else {
+            appendMessage('assistant', 'Audio recording saved (empty transcription).');
+          }
+        } catch (err) {
+          console.error('Failed to stop recording:', err);
+          voiceLabel.textContent = 'Record Voice';
+          appendMessage('assistant', `Voice capture error: ${err}`);
+        }
+      } else {
+        voiceLabel.textContent = 'Record Voice';
+        appendMessage('assistant', 'Voice recording captured and staged for transcription (Whisper Turbo ready).', { audio: true });
+      }
     }
   };
 
@@ -178,12 +214,41 @@ document.addEventListener('DOMContentLoaded', () => {
     btnVoiceToggle.addEventListener('click', toggleVoice);
   }
 
-  // Helper to append message into #chat-feed with code blocks, copy buttons, and audio bar
+  // Helper to append message into #chat-feed with code blocks, copy buttons, TabPFN metrics, and audio bar
   const appendMessage = (role, content, options = {}) => {
     const msgDiv = document.createElement('div');
     msgDiv.className = `chat-message ${role}-message`;
 
-    // If user message and has staged items summary, display badges
+    // TabPFN anomaly diagnostics summary card
+    if (options.metrics) {
+      const m = options.metrics;
+      const metricsCard = document.createElement('div');
+      metricsCard.className = 'tabular-metrics-card';
+      metricsCard.style.cssText = 'background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 8px; padding: 10px 14px; margin-bottom: 10px; font-size: 0.85rem; color: #cbd5e1;';
+
+      const outliers = m.outliers_detected !== undefined
+        ? m.outliers_detected
+        : (m.outlier_indices ? m.outlier_indices.length : 0);
+      const rows = m.row_count || 0;
+      const maxZ = m.max_z_score !== undefined ? Number(m.max_z_score).toFixed(2) : 'N/A';
+      const mean = m.mean !== undefined ? Number(m.mean).toFixed(2) : 'N/A';
+      const std = m.std_dev !== undefined ? Number(m.std_dev).toFixed(2) : 'N/A';
+
+      metricsCard.innerHTML = `
+        <div style="font-weight: 600; color: #60a5fa; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+          <span>📊</span><span>Prior Labs TabPFN Statistical Diagnostics</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; font-size: 0.8rem;">
+          <div><span style="color:#94a3b8">Rows:</span> <span style="font-weight:600; color:#f8fafc">${rows}</span></div>
+          <div><span style="color:#94a3b8">Outliers:</span> <span style="font-weight:600; color:${outliers > 0 ? '#ef4444' : '#10b981'}">${outliers}</span></div>
+          <div><span style="color:#94a3b8">Max Z-Score:</span> <span style="font-weight:600; color:#f8fafc">${maxZ}</span></div>
+          <div><span style="color:#94a3b8">Mean / Std:</span> <span style="font-weight:600; color:#f8fafc">${mean} / ${std}</span></div>
+        </div>
+      `;
+      msgDiv.appendChild(metricsCard);
+    }
+
+    // Staged badges summary inside user message card
     if (options.stagedSummary && options.stagedSummary.length > 0) {
       const summaryDiv = document.createElement('div');
       summaryDiv.className = 'msg-staged-summary';
@@ -204,7 +269,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (codeBlockRegex.test(content)) {
       codeBlockRegex.lastIndex = 0;
       while ((match = codeBlockRegex.exec(content)) !== null) {
-        // Text before code block
         const textBefore = content.substring(lastIndex, match.index);
         if (textBefore.trim()) {
           const p = document.createElement('p');
@@ -215,7 +279,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const lang = match[1] || 'plaintext';
         const codeText = match[2];
 
-        // Code block wrapper
         const wrapper = document.createElement('div');
         wrapper.className = 'code-block-wrapper';
         wrapper.innerHTML = `
@@ -238,7 +301,6 @@ document.addEventListener('DOMContentLoaded', () => {
         lastIndex = match.index + match[0].length;
       }
 
-      // Trailing text
       const remainingText = content.substring(lastIndex);
       if (remainingText.trim()) {
         const p = document.createElement('p');
@@ -251,12 +313,13 @@ document.addEventListener('DOMContentLoaded', () => {
       msgDiv.appendChild(p);
     }
 
-    // Optional audio bar playback UI
+    // ElevenLabs audio playback bar
     if (options.audio) {
+      const textToSpeak = options.rawText || content;
       const audioBar = document.createElement('div');
       audioBar.className = 'audio-playback-bar';
       audioBar.innerHTML = `
-        <button class="btn-audio-play" title="Play">▶</button>
+        <button class="btn-audio-play" title="Play ElevenLabs Audio">▶</button>
         <div class="waveform-stub">
           <span class="waveform-bar" style="height: 35%"></span>
           <span class="waveform-bar" style="height: 70%"></span>
@@ -267,12 +330,77 @@ document.addEventListener('DOMContentLoaded', () => {
           <span class="waveform-bar" style="height: 65%"></span>
           <span class="waveform-bar" style="height: 25%"></span>
         </div>
-        <span class="audio-duration">0:03</span>
+        <span class="audio-duration">ElevenLabs TTS</span>
       `;
+
       const playBtn = audioBar.querySelector('.btn-audio-play');
-      playBtn.addEventListener('click', () => {
-        playBtn.textContent = playBtn.textContent === '▶' ? '⏸' : '▶';
+      const durationSpan = audioBar.querySelector('.audio-duration');
+      let audioObj = null;
+
+      playBtn.addEventListener('click', async () => {
+        if (audioObj && !audioObj.paused) {
+          audioObj.pause();
+          playBtn.textContent = '▶';
+          audioBar.classList.remove('playing');
+          return;
+        }
+
+        if (audioObj && audioObj.paused && audioObj.currentTime > 0) {
+          audioObj.play().catch(console.error);
+          playBtn.textContent = '⏸';
+          audioBar.classList.add('playing');
+          return;
+        }
+
+        playBtn.textContent = '⏳';
+        durationSpan.textContent = 'Synthesizing...';
+
+        if (window.__TAURI__ && window.__TAURI__.core) {
+          try {
+            const bytes = await window.__TAURI__.core.invoke('synthesize_speech', {
+              text: textToSpeak,
+              backendUrl: null,
+            });
+
+            const blob = new Blob([new Uint8Array(bytes)], { type: 'audio/mpeg' });
+            const url = URL.createObjectURL(blob);
+            audioObj = new Audio(url);
+
+            audioObj.addEventListener('play', () => {
+              playBtn.textContent = '⏸';
+              audioBar.classList.add('playing');
+              durationSpan.textContent = 'Playing';
+            });
+
+            audioObj.addEventListener('pause', () => {
+              playBtn.textContent = '▶';
+              audioBar.classList.remove('playing');
+            });
+
+            audioObj.addEventListener('ended', () => {
+              playBtn.textContent = '▶';
+              audioBar.classList.remove('playing');
+              durationSpan.textContent = 'Finished';
+            });
+
+            audioObj.addEventListener('loadedmetadata', () => {
+              const mins = Math.floor(audioObj.duration / 60);
+              const secs = Math.floor(audioObj.duration % 60).toString().padStart(2, '0');
+              durationSpan.textContent = `${mins}:${secs}`;
+            });
+
+            await audioObj.play();
+          } catch (err) {
+            console.error('Speech synthesis error:', err);
+            playBtn.textContent = '⚠️';
+            durationSpan.textContent = 'TTS error';
+          }
+        } else {
+          playBtn.textContent = '▶';
+          durationSpan.textContent = 'Preview TTS';
+        }
       });
+
       msgDiv.appendChild(audioBar);
     }
 
@@ -289,13 +417,38 @@ document.addEventListener('DOMContentLoaded', () => {
       .replace(/'/g, '&#039;');
   };
 
-  // Send Prompt Handler
-  const sendPrompt = () => {
-    const text = composerInput.value.trim();
+  // Send Prompt Handler with Native Tauri Process Dispatching
+  const sendPrompt = async () => {
+    let text = composerInput.value.trim();
     if (!text && stagedItems.length === 0) return;
 
     const stagedSnapshot = [...stagedItems];
-    appendMessage('user', text || '(Processing staged context)', {
+    let dataType = 'text';
+    let filePath = null;
+
+    // Inspect staged items to determine payload modality
+    for (const item of stagedSnapshot) {
+      const p = (item.path || item.name || '').toLowerCase();
+      if (item.type === 'file' && p.endsWith('.csv')) {
+        dataType = 'tabular';
+        filePath = item.path;
+        break;
+      } else if (
+        item.type === 'snip' ||
+        p.endsWith('.png') ||
+        p.endsWith('.jpg') ||
+        p.endsWith('.jpeg') ||
+        p.endsWith('.webp')
+      ) {
+        dataType = 'image';
+        filePath = item.path;
+        break;
+      } else if (item.type === 'clipboard' && item.meta && item.meta.content) {
+        text = text ? `${text}\n\n[Clipboard Context]:\n${item.meta.content}` : item.meta.content;
+      }
+    }
+
+    appendMessage('user', text || `(Processing staged ${dataType} context)`, {
       stagedSummary: stagedSnapshot,
     });
 
@@ -306,11 +459,53 @@ document.addEventListener('DOMContentLoaded', () => {
       window.__TAURI__.event.emit('badges-cleared').catch(console.error);
     }
 
-    // Assistant response with syntax code block and confirmation
-    setTimeout(() => {
-      const reply = `Received ${stagedSnapshot.length} context items. Analysis queued for Gemma 4 pipeline:\n\n\`\`\`json\n{\n  "status": "ready",\n  "staged_count": ${stagedSnapshot.length},\n  "query": "${text}"\n}\n\`\`\``;
-      appendMessage('assistant', reply);
-    }, 350);
+    // Display loading indicator card
+    const loadingCard = document.createElement('div');
+    loadingCard.className = 'chat-message assistant-message loading-card';
+    loadingCard.innerHTML = `
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="display:inline-block; width:12px; height:12px; border:2px solid #f59e0b; border-top-color:transparent; border-radius:50%; animation:spin 0.8s linear infinite;"></span>
+        <span>Analyzing via Gemma 4 / TabPFN (${dataType})...</span>
+      </div>
+    `;
+    chatFeed.appendChild(loadingCard);
+    chatFeed.scrollTop = chatFeed.scrollHeight;
+
+    if (window.__TAURI__ && window.__TAURI__.core) {
+      try {
+        const response = await window.__TAURI__.core.invoke('send_process_payload', {
+          prompt: text,
+          dataType: dataType,
+          filePath: filePath,
+          backendUrl: null,
+        });
+
+        if (loadingCard.parentNode) {
+          loadingCard.parentNode.removeChild(loadingCard);
+        }
+
+        const answer = response.answer || JSON.stringify(response, null, 2);
+        appendMessage('assistant', answer, {
+          audio: true,
+          rawText: answer,
+          metrics: response.type === 'tabular_solution' ? response.metrics : null,
+        });
+      } catch (err) {
+        console.error('send_process_payload failed:', err);
+        if (loadingCard.parentNode) {
+          loadingCard.parentNode.removeChild(loadingCard);
+        }
+        appendMessage('assistant', `⚠️ Processing error: ${err}`);
+      }
+    } else {
+      setTimeout(() => {
+        if (loadingCard.parentNode) {
+          loadingCard.parentNode.removeChild(loadingCard);
+        }
+        const reply = `Received ${stagedSnapshot.length} context items. Analysis queued for Gemma 4 pipeline:\n\n\`\`\`json\n{\n  "status": "ready",\n  "staged_count": ${stagedSnapshot.length},\n  "query": "${text}"\n}\n\`\`\``;
+        appendMessage('assistant', reply, { audio: true, rawText: reply });
+      }, 350);
+    }
   };
 
   if (btnSendPrompt) {

@@ -1,6 +1,8 @@
+pub mod audio_engine;
 pub mod commands;
 pub mod hotkeys;
 pub mod memory_shield;
+pub mod network_gateway;
 pub mod screen_capture;
 pub mod tray;
 
@@ -20,7 +22,11 @@ pub fn run() {
             toggle_window,
             hide_window,
             show_window,
-            capture_screen_region
+            capture_screen_region,
+            send_process_payload,
+            start_voice_recording,
+            stop_voice_recording,
+            synthesize_speech
         ])
         .run(tauri::generate_context!())
         .expect("error while running PotatoClaw application");
