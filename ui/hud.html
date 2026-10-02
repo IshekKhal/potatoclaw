@@ -5,71 +5,102 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PotatoClaw Assistant</title>
   <link rel="stylesheet" href="styles/main.css">
+  <link rel="stylesheet" href="styles/hud.css">
 </head>
 <body>
-  <div class="hud-window">
-    <!-- Header with drag region and window controls -->
+  <div class="hud-container">
+    <!-- Header Section with Drag Region -->
     <header class="hud-header" data-tauri-drag-region>
       <div class="hud-brand" data-tauri-drag-region>
+        <!-- PotatoClaw Paw Icon -->
         <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <circle cx="12" cy="12" r="10" fill="#1e293b" stroke="#f59e0b" stroke-width="2"/>
           <circle cx="8" cy="8" r="1.5" fill="#fef3c7"/>
-          <circle cx="12" cy="6.5" r="1.5" fill="#fef3c7"/>
+          <circle cx="12" cy="6.2" r="1.5" fill="#fef3c7"/>
           <circle cx="16" cy="8" r="1.5" fill="#fef3c7"/>
-          <path d="M7 13c1.5 2 4.5 3 5 3s3.5-1 5-3" stroke="#fef3c7" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M7 13.5c1.5 2 4.5 3 5 3s3.5-1 5-3" stroke="#fef3c7" stroke-width="1.5" stroke-linecap="round"/>
         </svg>
         <span>PotatoClaw</span>
+        <span class="version-badge">v0.1.0</span>
       </div>
+
+      <!-- Live RAM Reclaimed Badge -->
+      <div class="hud-header-center" data-tauri-drag-region>
+        <button id="ramBadge" class="ram-badge" title="Click to trim idle background working sets">
+          <span class="pulse-dot"></span>
+          <span id="ramBadgeText">Memory Shield: 3.1 GB reclaimed</span>
+        </button>
+      </div>
+
+      <!-- Window Controls -->
       <div class="hud-header-actions">
-        <button id="btnCloseHud" class="btn-icon" title="Close (Esc)">✕</button>
+        <button id="btnMinHud" class="btn-header-control" title="Minimize (Esc)">—</button>
+        <button id="btnCloseHud" class="btn-header-control btn-close" title="Close">✕</button>
       </div>
     </header>
 
-    <!-- Main Body -->
+    <!-- Main Section -->
     <main class="hud-body">
-      <!-- RAM Shield Status Card -->
-      <section class="ram-shield-card">
-        <div class="ram-info-col">
-          <span class="ram-label">Win32 Memory Shield</span>
-          <span id="ramReclaimedDisplay" class="ram-value">Ready (Idle &lt; 20 MB)</span>
+      <!-- Staged Context Area (#staged-badges) -->
+      <section class="staged-context-wrapper">
+        <div class="staged-header-row">
+          <span class="staged-label">Staged Context</span>
+          <span id="stagedCountHint" class="staged-label" style="font-size: 10px;">0 attached</span>
         </div>
-        <button id="btnTrimMemory" class="btn-trim" title="Flush idle background working sets">
-          Trim Memory
-        </button>
-      </section>
-
-      <!-- Staged Ingestion Items -->
-      <section class="staged-section">
-        <span class="section-title">Staged Context</span>
-        <div id="stagedList" class="staged-list">
-          <div class="staged-item" style="color: var(--text-muted); font-style: italic;">
-            Drop files or press Alt+Shift+1 / Alt+Shift+2 to stage context
-          </div>
+        <div id="staged-badges" class="staged-badges-container">
+          <span class="staged-empty-hint">Drop files on DropBox pill, press Alt+Shift+1 (clipboard), or Alt+Shift+2 (snip) to stage context</span>
         </div>
       </section>
 
-      <!-- Conversation & Insight Output Area -->
-      <section id="chatHistory" class="chat-history-container">
-        <div class="chat-bubble bubble-assistant">
-          PotatoClaw native client active. Win32 working-set shield ready. Press <span class="shortcut-badge">Alt+Shift+P</span> to toggle HUD.
+      <!-- Message Feed Area (#chat-feed) -->
+      <section id="chat-feed" class="chat-feed-container">
+        <!-- Initial Welcome Message from Assistant -->
+        <div class="chat-message assistant-message">
+          <p>PotatoClaw client initialized. Win32 working-set memory shield active.</p>
+          <p style="margin-top: 4px; color: var(--text-muted); font-size: 11.5px;">
+            Stage context with <span class="hint-badge">Alt+Shift+1</span> (Clipboard), <span class="hint-badge">Alt+Shift+2</span> (Screen Snip), or drag files onto the floating pill.
+          </p>
         </div>
       </section>
     </main>
 
     <!-- Footer Composer -->
     <footer class="hud-footer">
-      <div class="composer-row">
-        <textarea id="composerInput" class="composer-input" placeholder="Ask PotatoClaw or query staged data..."></textarea>
-        <div class="composer-actions">
-          <button id="btnMicToggle" class="btn-mic" title="Toggle Mic (Alt+Shift+V)">🎤</button>
-          <button id="btnSendPrompt" class="btn-send">Send</button>
+      <textarea id="composerInput" class="composer-textarea" placeholder="Ask PotatoClaw or query staged context... (Enter to send, Shift+Enter for newline)"></textarea>
+
+      <!-- Action Row Controls -->
+      <div class="action-row">
+        <div class="action-left-group">
+          <!-- [Record Voice] Button -->
+          <button id="btnVoiceToggle" class="btn-action btn-voice" title="Toggle Voice (Alt+Shift+V)">
+            <span id="voiceIcon">🎤</span>
+            <span id="voiceLabel">Record Voice</span>
+          </button>
+
+          <!-- [Attach File] Button -->
+          <button id="btnAttachFile" class="btn-action" title="Attach files manually">
+            <span>📎</span>
+            <span>Attach File</span>
+          </button>
+          <input type="file" id="filePicker" multiple style="display: none;">
+
+          <!-- [Clear] Button -->
+          <button id="btnClearStaged" class="btn-action btn-clear" title="Clear all staged badges and prompt">
+            <span>🗑️</span>
+            <span>Clear</span>
+          </button>
         </div>
+
+        <!-- [Send] Button -->
+        <button id="btnSendPrompt" class="btn-send">Send</button>
       </div>
-      <div class="shortcuts-legend">
-        <span><span class="shortcut-badge">Alt+Shift+1</span> Clip</span>
-        <span><span class="shortcut-badge">Alt+Shift+2</span> Snip</span>
-        <span><span class="shortcut-badge">Alt+Shift+V</span> Voice</span>
-        <span><span class="shortcut-badge">Esc</span> Hide</span>
+
+      <div class="composer-shortcuts-hint">
+        <span><span class="hint-badge">Alt+Shift+1</span> Clipboard</span>
+        <span><span class="hint-badge">Alt+Shift+2</span> Snip</span>
+        <span><span class="hint-badge">Alt+Shift+V</span> Voice</span>
+        <span><span class="hint-badge">Alt+Shift+P</span> Toggle HUD</span>
+        <span><span class="hint-badge">Esc</span> Dismiss</span>
       </div>
     </footer>
   </div>

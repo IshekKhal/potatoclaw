@@ -49,3 +49,9 @@ pub fn show_window(app: AppHandle, label: String) -> Result<(), String> {
         Err(format!("Window '{}' not found", label))
     }
 }
+
+#[tauri::command]
+pub fn capture_screen_region(x: u32, y: u32, width: u32, height: u32) -> Result<String, String> {
+    crate::screen_capture::capture_screen_region(x, y, width, height)
+}
+

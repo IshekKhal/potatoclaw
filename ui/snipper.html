@@ -5,13 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PotatoClaw Screen Capture</title>
   <link rel="stylesheet" href="styles/main.css">
+  <link rel="stylesheet" href="styles/snipper.css">
 </head>
 <body style="background: transparent;">
   <div id="snipperOverlay" class="snipper-canvas-overlay">
     <div class="snip-instructions">
       Drag to snip a region | Press <span class="shortcut-badge">Esc</span> to cancel
     </div>
-    <div id="selectionBox" class="snip-selection-box"></div>
+    <div id="selectionBox" class="snip-selection-box">
+      <div id="dimBadge" class="snip-dimension-badge">0 × 0 px</div>
+    </div>
   </div>
 
   <script src="js/snipper.js"></script>

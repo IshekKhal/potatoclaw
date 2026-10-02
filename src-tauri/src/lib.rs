@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod hotkeys;
 pub mod memory_shield;
+pub mod screen_capture;
 pub mod tray;
 
 use commands::*;
@@ -18,7 +19,8 @@ pub fn run() {
             get_foreground_process,
             toggle_window,
             hide_window,
-            show_window
+            show_window,
+            capture_screen_region
         ])
         .run(tauri::generate_context!())
         .expect("error while running PotatoClaw application");

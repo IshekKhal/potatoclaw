@@ -1,0 +1,83 @@
+/* Window 3: Fullscreen Snipper Overlay */
+
+html, body {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  user-select: none;
+  background: transparent;
+}
+
+.snipper-canvas-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(15, 23, 42, 0.35);
+  cursor: crosshair;
+  z-index: 9999;
+}
+
+/* Floating instruction banner at the top */
+.snip-instructions {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 500;
+  pointer-events: none;
+  letter-spacing: -0.01em;
+}
+
+.shortcut-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  background: var(--bg-hover);
+  border: 1px solid var(--border-subtle);
+  color: var(--accent-amber);
+}
+
+/* Rubber-band Selection Box */
+.snip-selection-box {
+  position: absolute;
+  display: none;
+  border: 1.5px dashed var(--accent-amber);
+  background: rgba(245, 158, 11, 0.08);
+  box-shadow: 0 0 0 99999px rgba(15, 23, 42, 0.45);
+  pointer-events: none;
+}
+
+/* Dynamic Dimension Badge */
+.snip-dimension-badge {
+  position: absolute;
+  bottom: -28px;
+  right: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--accent-amber);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 8px;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
