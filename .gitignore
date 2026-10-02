@@ -27,3 +27,6 @@ __pycache__/
 .ruff_cache/
 .coverage
 htmlcov/
+
+# Rust Build Targets
+**/target/

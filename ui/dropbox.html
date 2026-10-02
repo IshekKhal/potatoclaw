@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PotatoClaw DropBox</title>
+  <link rel="stylesheet" href="styles/main.css">
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="dropboxPill" class="dropbox-container" data-tauri-drag-region>
+    <!-- Potato Claw Icon -->
+    <svg class="dropbox-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14h-2v-2h2v2zm0-4h-2V7h2v5z" fill="#f59e0b"/>
+      <circle cx="8" cy="8" r="1.5" fill="#fef3c7"/>
+      <circle cx="12" cy="6.5" r="1.5" fill="#fef3c7"/>
+      <circle cx="16" cy="8" r="1.5" fill="#fef3c7"/>
+      <path d="M7 13c1.5 2 4.5 3 5 3s3.5-1 5-3" stroke="#fef3c7" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    <div id="dropBadge" class="dropbox-badge">1</div>
+  </div>
+
+  <script src="js/dropbox.js"></script>
+</body>
+</html>

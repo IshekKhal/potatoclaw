@@ -1,0 +1,66 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "potatoclaw",
+  "version": "0.1.0",
+  "identifier": "com.potatoclaw.app",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "dropbox",
+        "title": "PotatoClaw DropBox",
+        "width": 64,
+        "height": 64,
+        "minWidth": 48,
+        "minHeight": 48,
+        "maxWidth": 180,
+        "maxHeight": 180,
+        "resizable": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "transparent": true,
+        "visible": true,
+        "url": "dropbox.html"
+      },
+      {
+        "label": "hud",
+        "title": "PotatoClaw Assistant",
+        "width": 540,
+        "height": 680,
+        "resizable": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "transparent": true,
+        "visible": false,
+        "url": "hud.html"
+      },
+      {
+        "label": "snipper",
+        "title": "PotatoClaw Screen Capture",
+        "fullscreen": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "transparent": true,
+        "visible": false,
+        "url": "snipper.html"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

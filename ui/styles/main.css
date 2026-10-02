@@ -1,0 +1,404 @@
+/* PotatoClaw Clean Slate & Warm Amber Design System */
+:root {
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-card: #182234;
+  --bg-hover: #334155;
+  --border-subtle: #334155;
+  --border-focus: #f59e0b;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --accent-amber: #f59e0b;
+  --accent-amber-hover: #d97706;
+  --accent-green: #10b981;
+  --accent-red: #ef4444;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html, body {
+  background: transparent;
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow: hidden;
+  height: 100%;
+  width: 100%;
+}
+
+/* ==========================================================================
+   Window 1: DropBox Floating Pill (64x64)
+   ========================================================================== */
+.dropbox-container {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  border: 2px solid var(--accent-amber);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  position: relative;
+}
+
+.dropbox-container:active {
+  cursor: grabbing;
+}
+
+.dropbox-container.drag-over {
+  border-color: var(--accent-green);
+  background: #064e3b;
+  transform: scale(1.08);
+}
+
+.dropbox-icon {
+  width: 32px;
+  height: 32px;
+  fill: var(--accent-amber);
+  pointer-events: none;
+}
+
+.dropbox-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent-green);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ==========================================================================
+   Window 2: Conversational HUD & Composer (540x680)
+   ========================================================================== */
+.hud-window {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+
+.hud-header {
+  height: 48px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.hud-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.hud-brand svg {
+  width: 22px;
+  height: 22px;
+  fill: var(--accent-amber);
+}
+
+.hud-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.btn-icon:hover {
+  background: var(--bg-hover);
+  color: var(--text-main);
+}
+
+.hud-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.ram-shield-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ram-info-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ram-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.ram-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent-green);
+}
+
+.btn-trim {
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-amber);
+  color: #0f172a;
+  border: none;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.btn-trim:hover {
+  background: var(--accent-amber-hover);
+}
+
+.staged-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.staged-list {
+  min-height: 56px;
+  max-height: 120px;
+  overflow-y: auto;
+  background: var(--bg-card);
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.staged-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.chat-history-container {
+  flex: 1;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chat-bubble {
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  max-width: 85%;
+  line-height: 1.45;
+  font-size: 13px;
+  word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.bubble-user {
+  background: var(--accent-amber);
+  color: #0f172a;
+  align-self: flex-end;
+  font-weight: 500;
+}
+
+.bubble-assistant {
+  background: var(--bg-secondary);
+  color: var(--text-main);
+  border: 1px solid var(--border-subtle);
+  align-self: flex-start;
+}
+
+.hud-footer {
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.composer-row {
+  display: flex;
+  gap: 8px;
+}
+
+.composer-input {
+  flex: 1;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  color: var(--text-main);
+  font-family: inherit;
+  font-size: 13px;
+  resize: none;
+  height: 48px;
+  outline: none;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.composer-input:focus {
+  border-color: var(--border-focus);
+}
+
+.composer-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-send {
+  padding: 0 16px;
+  background: var(--accent-amber);
+  color: #0f172a;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.btn-send:hover {
+  background: var(--accent-amber-hover);
+}
+
+.btn-mic {
+  width: 44px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-mic.recording {
+  background: #7f1d1d;
+  color: #fca5a5;
+  border-color: var(--accent-red);
+}
+
+.shortcuts-legend {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.shortcut-badge {
+  background: var(--bg-card);
+  padding: 2px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-subtle);
+  font-family: monospace;
+}
+
+/* ==========================================================================
+   Window 3: Screen Capture Snipper Overlay (Fullscreen)
+   ========================================================================== */
+.snipper-canvas-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  cursor: crosshair;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.snip-selection-box {
+  position: absolute;
+  border: 2px solid var(--accent-amber);
+  background: rgba(245, 158, 11, 0.12);
+  display: none;
+  pointer-events: none;
+}
+
+.snip-instructions {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  color: var(--text-main);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}

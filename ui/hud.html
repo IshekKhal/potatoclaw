@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PotatoClaw Assistant</title>
+  <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+  <div class="hud-window">
+    <!-- Header with drag region and window controls -->
+    <header class="hud-header" data-tauri-drag-region>
+      <div class="hud-brand" data-tauri-drag-region>
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="12" cy="12" r="10" fill="#1e293b" stroke="#f59e0b" stroke-width="2"/>
+          <circle cx="8" cy="8" r="1.5" fill="#fef3c7"/>
+          <circle cx="12" cy="6.5" r="1.5" fill="#fef3c7"/>
+          <circle cx="16" cy="8" r="1.5" fill="#fef3c7"/>
+          <path d="M7 13c1.5 2 4.5 3 5 3s3.5-1 5-3" stroke="#fef3c7" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span>PotatoClaw</span>
+      </div>
+      <div class="hud-header-actions">
+        <button id="btnCloseHud" class="btn-icon" title="Close (Esc)">✕</button>
+      </div>
+    </header>
+
+    <!-- Main Body -->
+    <main class="hud-body">
+      <!-- RAM Shield Status Card -->
+      <section class="ram-shield-card">
+        <div class="ram-info-col">
+          <span class="ram-label">Win32 Memory Shield</span>
+          <span id="ramReclaimedDisplay" class="ram-value">Ready (Idle &lt; 20 MB)</span>
+        </div>
+        <button id="btnTrimMemory" class="btn-trim" title="Flush idle background working sets">
+          Trim Memory
+        </button>
+      </section>
+
+      <!-- Staged Ingestion Items -->
+      <section class="staged-section">
+        <span class="section-title">Staged Context</span>
+        <div id="stagedList" class="staged-list">
+          <div class="staged-item" style="color: var(--text-muted); font-style: italic;">
+            Drop files or press Alt+Shift+1 / Alt+Shift+2 to stage context
+          </div>
+        </div>
+      </section>
+
+      <!-- Conversation & Insight Output Area -->
+      <section id="chatHistory" class="chat-history-container">
+        <div class="chat-bubble bubble-assistant">
+          PotatoClaw native client active. Win32 working-set shield ready. Press <span class="shortcut-badge">Alt+Shift+P</span> to toggle HUD.
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer Composer -->
+    <footer class="hud-footer">
+      <div class="composer-row">
+        <textarea id="composerInput" class="composer-input" placeholder="Ask PotatoClaw or query staged data..."></textarea>
+        <div class="composer-actions">
+          <button id="btnMicToggle" class="btn-mic" title="Toggle Mic (Alt+Shift+V)">🎤</button>
+          <button id="btnSendPrompt" class="btn-send">Send</button>
+        </div>
+      </div>
+      <div class="shortcuts-legend">
+        <span><span class="shortcut-badge">Alt+Shift+1</span> Clip</span>
+        <span><span class="shortcut-badge">Alt+Shift+2</span> Snip</span>
+        <span><span class="shortcut-badge">Alt+Shift+V</span> Voice</span>
+        <span><span class="shortcut-badge">Esc</span> Hide</span>
+      </div>
+    </footer>
+  </div>
+
+  <script src="js/hud.js"></script>
+</body>
+</html>
