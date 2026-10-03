@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
     ELEVENLABS_API_KEY: str = ""
     BACKBOARD_API_KEY: str = ""
+    ACCESS_CODE: str = ""
     # Server settings
     HOST: str = "0.0.0.0"
     PORT: int = 8000
