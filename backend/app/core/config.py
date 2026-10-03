@@ -20,8 +20,7 @@ class Settings(BaseSettings):
     SENTRY_DSN: str = ""
     GROQ_API_KEY: str = ""
     ELEVENLABS_API_KEY: str = ""
-    BACKBOARD_API_KEY: Optional[str] = ""
-
+    BACKBOARD_API_KEY: str = ""
     # Server settings
     HOST: str = "0.0.0.0"
     PORT: int = 8000

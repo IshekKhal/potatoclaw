@@ -1,9 +1,15 @@
 # Documentation & Sensitive files
 /docs
+/docs/*
+MASTER_BUILD_LOG.md
+progress.md
+memory.md
+MASTER_PROMPT.txt
 .env*
 !.env.example
 
 # Scratch Text Files & Buffer
+prompt.txt
 *.txt
 !requirements.txt
 !backend/requirements.txt
