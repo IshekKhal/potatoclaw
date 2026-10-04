@@ -72,6 +72,7 @@ async fn test_text_reasoning_pipeline() {
         prompt,
         "text".to_string(),
         None,
+        None,
         Some(BACKEND_URL.to_string()),
         None,
     )
@@ -109,6 +110,7 @@ async fn test_tabular_analysis_pipeline() {
         prompt,
         "tabular".to_string(),
         Some(temp_csv.to_string_lossy().to_string()),
+        None,
         Some(BACKEND_URL.to_string()),
         None,
     )
@@ -145,6 +147,7 @@ async fn test_multimodal_vision_pipeline() {
         prompt,
         "image".to_string(),
         Some(temp_png.to_string_lossy().to_string()),
+        None,
         Some(BACKEND_URL.to_string()),
         None,
     )

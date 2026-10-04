@@ -1,0 +1,71 @@
+name: Release Standalone Windows Executable
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag name for release (e.g. v0.1.0)'
+        required: false
+        default: 'v0.1.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build potatoclaw.exe (Windows x64)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo dependencies
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+
+      - name: Build standalone release binary
+        shell: pwsh
+        run: |
+          cd src-tauri
+          cargo build --release
+
+      - name: Verify binary output
+        shell: pwsh
+        run: |
+          $bin = "src-tauri/target/release/potatoclaw.exe"
+          if (Test-Path $bin) {
+            $item = Get-Item $bin
+            Write-Host "Binary built successfully: $($item.FullName) ($([math]::Round($item.Length / 1MB, 2)) MB)"
+          } else {
+            Write-Error "Binary not found at $bin"
+            exit 1
+          }
+
+      - name: Upload artifact for direct download
+        uses: actions/upload-artifact@v4
+        with:
+          name: potatoclaw-windows-x64
+          path: src-tauri/target/release/potatoclaw.exe
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        with:
+          tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
+          name: PotatoClaw ${{ github.event.inputs.tag_name || github.ref_name }}
+          draft: false
+          prerelease: false
+          files: |
+            src-tauri/target/release/potatoclaw.exe
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
