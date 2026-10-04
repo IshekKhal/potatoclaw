@@ -1,5 +1,5 @@
 //! Native HTTP network gateway for dispatching multimodal queries, speech-to-text,
-//! and speech synthesis to the FastAPI cloud backend.
+//! speech synthesis, and authentication verification to the FastAPI cloud backend.
 
 use reqwest::multipart::{Form, Part};
 use std::path::Path;
@@ -8,15 +8,29 @@ const DEFAULT_BACKEND_URL: &str = "http://127.0.0.1:8000";
 
 /// Resolve base backend URL.
 fn resolve_base_url(backend_url: Option<String>) -> String {
-    backend_url
-        .filter(|u| !u.trim().is_empty())
-        .unwrap_or_else(|| DEFAULT_BACKEND_URL.to_string())
-        .trim_end_matches('/')
-        .to_string()
+    if let Some(url) = backend_url {
+        let trimmed = url.trim();
+        if !trimmed.is_empty() {
+            return trimmed.trim_end_matches('/').to_string();
+        }
+    }
+    if let Ok(val) = std::env::var("POTATOCLAW_BACKEND_URL") {
+        let trimmed = val.trim();
+        if !trimmed.is_empty() {
+            return trimmed.trim_end_matches('/').to_string();
+        }
+    }
+    DEFAULT_BACKEND_URL.trim_end_matches('/').to_string()
 }
 
-/// Resolve access code from environment variable or .env files.
-fn resolve_access_code() -> Option<String> {
+/// Resolve access code from explicit override, environment variable, or candidate .env files.
+fn resolve_access_code(override_code: Option<String>) -> Option<String> {
+    if let Some(code) = override_code {
+        let trimmed = code.trim().to_string();
+        if !trimmed.is_empty() {
+            return Some(trimmed);
+        }
+    }
     if let Ok(val) = std::env::var("ACCESS_CODE") {
         let trimmed = val.trim().to_string();
         if !trimmed.is_empty() {
@@ -65,6 +79,7 @@ pub async fn dispatch_process(
     data_type: String,
     file_path: Option<String>,
     backend_url: Option<String>,
+    access_code: Option<String>,
 ) -> Result<serde_json::Value, String> {
     let base = resolve_base_url(backend_url);
     let url = format!("{}/api/v1/process", base);
@@ -101,7 +116,7 @@ pub async fn dispatch_process(
     }
 
     let mut req = client.post(&url).multipart(form);
-    if let Some(code) = resolve_access_code() {
+    if let Some(code) = resolve_access_code(access_code) {
         req = req.header("X-Access-Code", code);
     }
 
@@ -128,6 +143,7 @@ pub async fn dispatch_process(
 pub async fn dispatch_transcribe(
     audio_path: String,
     backend_url: Option<String>,
+    access_code: Option<String>,
 ) -> Result<String, String> {
     let base = resolve_base_url(backend_url);
     let url = format!("{}/api/v1/transcribe", base);
@@ -155,7 +171,7 @@ pub async fn dispatch_transcribe(
     let form = Form::new().part("audio", part);
 
     let mut req = client.post(&url).multipart(form);
-    if let Some(code) = resolve_access_code() {
+    if let Some(code) = resolve_access_code(access_code) {
         req = req.header("X-Access-Code", code);
     }
 
@@ -189,6 +205,7 @@ pub async fn dispatch_transcribe(
 pub async fn dispatch_speak(
     text: String,
     backend_url: Option<String>,
+    access_code: Option<String>,
 ) -> Result<Vec<u8>, String> {
     let base = resolve_base_url(backend_url);
     let url = format!("{}/api/v1/speak", base);
@@ -197,7 +214,7 @@ pub async fn dispatch_speak(
     let form = Form::new().text("text", text);
 
     let mut req = client.post(&url).multipart(form);
-    if let Some(code) = resolve_access_code() {
+    if let Some(code) = resolve_access_code(access_code) {
         req = req.header("X-Access-Code", code);
     }
 
@@ -218,4 +235,38 @@ pub async fn dispatch_speak(
         .map_err(|e| format!("Failed to read response audio bytes: {}", e))?;
 
     Ok(audio_bytes.to_vec())
+}
+
+/// Probes {base_url}/api/v1/auth/verify to validate backend connectivity and Access Code.
+pub async fn dispatch_verify_auth(
+    backend_url: Option<String>,
+    access_code: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let base = resolve_base_url(backend_url);
+    let url = format!("{}/api/v1/auth/verify", base);
+    let client = reqwest::Client::new();
+
+    let mut req = client.post(&url);
+    if let Some(code) = resolve_access_code(access_code) {
+        req = req.header("X-Access-Code", code);
+    }
+
+    let response = req
+        .send()
+        .await
+        .map_err(|e| format!("Connection failed: {}", e))?;
+
+    let status = response.status();
+    if status == reqwest::StatusCode::OK {
+        let json_res = response
+            .json::<serde_json::Value>()
+            .await
+            .map_err(|e| format!("Failed to parse response JSON from {}: {}", url, e))?;
+        Ok(json_res)
+    } else if status == reqwest::StatusCode::UNAUTHORIZED {
+        Err("Unauthorized: Invalid access code".to_string())
+    } else {
+        let err_text = response.text().await.unwrap_or_default();
+        Err(format!("Backend error ({}) from {}: {}", status, url, err_text))
+    }
 }

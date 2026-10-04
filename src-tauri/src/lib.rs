@@ -14,6 +14,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(hotkeys::build_shortcut_plugin())
         .setup(|app| {
+            hotkeys::register_hotkeys(app.handle());
             tray::setup_tray(app.handle())?;
             if let Some(window) = app.get_webview_window("dropbox") {
                 let _ = window.set_shadow(false);
@@ -32,6 +33,7 @@ pub fn run() {
             hide_window,
             show_window,
             capture_screen_region,
+            verify_connection,
             send_process_payload,
             start_voice_recording,
             stop_voice_recording,

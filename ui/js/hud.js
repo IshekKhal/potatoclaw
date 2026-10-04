@@ -5,6 +5,34 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnMinHud = document.getElementById('btnMinHud');
   const btnCloseHud = document.getElementById('btnCloseHud');
 
+  // Storage Keys for persistent settings
+  const STORAGE_KEY_BACKEND_URL = 'potatoclaw_backend_url';
+  const STORAGE_KEY_ACCESS_CODE = 'potatoclaw_access_code';
+
+  // Helper to obtain active config from localStorage
+  const getEffectiveConfig = () => ({
+    backendUrl: localStorage.getItem(STORAGE_KEY_BACKEND_URL) || null,
+    accessCode: localStorage.getItem(STORAGE_KEY_ACCESS_CODE) || null,
+  });
+
+  // Settings modal elements
+  const btnSettings = document.getElementById('btnSettings');
+  const settingsModal = document.getElementById('settingsModal');
+  const btnCloseSettings = document.getElementById('btnCloseSettings');
+  const settingBackendUrl = document.getElementById('settingBackendUrl');
+  const settingAccessCode = document.getElementById('settingAccessCode');
+  const btnToggleAccessCode = document.getElementById('btnToggleAccessCode');
+  const connectionStatus = document.getElementById('connectionStatus');
+  const connectionStatusText = document.getElementById('connectionStatusText');
+  const btnTestConnection = document.getElementById('btnTestConnection');
+  const btnSaveSettings = document.getElementById('btnSaveSettings');
+
+  // Initialize Settings Inputs from localStorage
+  const initialUrl = localStorage.getItem(STORAGE_KEY_BACKEND_URL);
+  const initialCode = localStorage.getItem(STORAGE_KEY_ACCESS_CODE);
+  if (initialUrl && settingBackendUrl) settingBackendUrl.value = initialUrl;
+  if (initialCode && settingAccessCode) settingAccessCode.value = initialCode;
+
   // Staged context elements
   const stagedBadgesContainer = document.getElementById('staged-badges');
   const stagedCountHint = document.getElementById('stagedCountHint');
@@ -37,9 +65,111 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnMinHud) btnMinHud.addEventListener('click', hideHud);
   if (btnCloseHud) btnCloseHud.addEventListener('click', hideHud);
 
-  // Esc key closes HUD
+  // Status indicator helper
+  const setConnectionStatus = (statusClass, message) => {
+    if (connectionStatus && connectionStatusText) {
+      connectionStatus.className = `connection-status ${statusClass}`;
+      connectionStatusText.textContent = message;
+    }
+  };
+
+  // Settings Modal Controls
+  const openSettings = () => {
+    if (settingsModal) {
+      const cfg = getEffectiveConfig();
+      if (settingBackendUrl) settingBackendUrl.value = cfg.backendUrl || '';
+      if (settingAccessCode) settingAccessCode.value = cfg.accessCode || '';
+      setConnectionStatus('idle', 'Status: Ready');
+      settingsModal.classList.remove('hidden');
+    }
+  };
+
+  const closeSettings = () => {
+    if (settingsModal) {
+      settingsModal.classList.add('hidden');
+    }
+  };
+
+  if (btnSettings) btnSettings.addEventListener('click', openSettings);
+  if (btnCloseSettings) btnCloseSettings.addEventListener('click', closeSettings);
+
+  // Password Visibility Toggle
+  if (btnToggleAccessCode && settingAccessCode) {
+    btnToggleAccessCode.addEventListener('click', () => {
+      if (settingAccessCode.type === 'password') {
+        settingAccessCode.type = 'text';
+        btnToggleAccessCode.textContent = '🙈';
+      } else {
+        settingAccessCode.type = 'password';
+        btnToggleAccessCode.textContent = '👁️';
+      }
+    });
+  }
+
+  // Connection Probing Test Handler
+  if (btnTestConnection) {
+    btnTestConnection.addEventListener('click', async () => {
+      setConnectionStatus('checking', 'Testing connection...');
+      const urlVal = settingBackendUrl ? settingBackendUrl.value.trim() : '';
+      const codeVal = settingAccessCode ? settingAccessCode.value.trim() : '';
+
+      if (window.__TAURI__ && window.__TAURI__.core) {
+        try {
+          const res = await window.__TAURI__.core.invoke('verify_connection', {
+            backendUrl: urlVal || null,
+            accessCode: codeVal || null,
+          });
+          if (res && res.status === 'authorized') {
+            setConnectionStatus('connected', 'Connected: Authorized (HTTP 200)');
+          } else {
+            setConnectionStatus('unauthorized', 'Unexpected response from server');
+          }
+        } catch (err) {
+          const errStr = String(err);
+          if (errStr.toLowerCase().includes('unauthorized') || errStr.includes('401')) {
+            setConnectionStatus('unauthorized', 'Unauthorized: Invalid access code (HTTP 401)');
+          } else {
+            setConnectionStatus('offline', `Connection failed: ${errStr}`);
+          }
+        }
+      } else {
+        setConnectionStatus('connected', 'Connected: Authorized (Simulated)');
+      }
+    });
+  }
+
+  // Settings Save Handler
+  if (btnSaveSettings) {
+    btnSaveSettings.addEventListener('click', () => {
+      const urlVal = settingBackendUrl ? settingBackendUrl.value.trim() : '';
+      const codeVal = settingAccessCode ? settingAccessCode.value.trim() : '';
+
+      if (urlVal) {
+        localStorage.setItem(STORAGE_KEY_BACKEND_URL, urlVal);
+      } else {
+        localStorage.removeItem(STORAGE_KEY_BACKEND_URL);
+      }
+
+      if (codeVal) {
+        localStorage.setItem(STORAGE_KEY_ACCESS_CODE, codeVal);
+      } else {
+        localStorage.removeItem(STORAGE_KEY_ACCESS_CODE);
+      }
+
+      setConnectionStatus('connected', 'Settings Saved!');
+      setTimeout(() => {
+        closeSettings();
+      }, 400);
+    });
+  }
+
+  // Esc key closes Settings modal first if open, otherwise hides HUD
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+      if (settingsModal && !settingsModal.classList.contains('hidden')) {
+        closeSettings();
+        return;
+      }
       hideHud();
     }
   });
@@ -186,7 +316,12 @@ document.addEventListener('DOMContentLoaded', () => {
       voiceLabel.textContent = 'Transcribing...';
       if (window.__TAURI__ && window.__TAURI__.core) {
         try {
-          const result = await window.__TAURI__.core.invoke('stop_voice_recording', { transcribe: true });
+          const cfg = getEffectiveConfig();
+          const result = await window.__TAURI__.core.invoke('stop_voice_recording', {
+            transcribe: true,
+            backendUrl: cfg.backendUrl,
+            accessCode: cfg.accessCode,
+          });
           voiceLabel.textContent = 'Record Voice';
           if (result && result.transcription && result.transcription.trim()) {
             const transcript = result.transcription.trim();
@@ -357,9 +492,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (window.__TAURI__ && window.__TAURI__.core) {
           try {
+            const cfg = getEffectiveConfig();
             const bytes = await window.__TAURI__.core.invoke('synthesize_speech', {
               text: textToSpeak,
-              backendUrl: null,
+              backendUrl: cfg.backendUrl,
+              accessCode: cfg.accessCode,
             });
 
             const blob = new Blob([new Uint8Array(bytes)], { type: 'audio/mpeg' });
@@ -473,11 +610,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (window.__TAURI__ && window.__TAURI__.core) {
       try {
+        const cfg = getEffectiveConfig();
         const response = await window.__TAURI__.core.invoke('send_process_payload', {
           prompt: text,
           dataType: dataType,
           filePath: filePath,
-          backendUrl: null,
+          backendUrl: cfg.backendUrl,
+          accessCode: cfg.accessCode,
         });
 
         if (loadingCard.parentNode) {

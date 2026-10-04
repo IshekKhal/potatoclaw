@@ -56,13 +56,22 @@ pub fn capture_screen_region(x: u32, y: u32, width: u32, height: u32) -> Result<
 }
 
 #[tauri::command]
+pub async fn verify_connection(
+    backend_url: Option<String>,
+    access_code: Option<String>,
+) -> Result<serde_json::Value, String> {
+    crate::network_gateway::dispatch_verify_auth(backend_url, access_code).await
+}
+
+#[tauri::command]
 pub async fn send_process_payload(
     prompt: String,
     data_type: String,
     file_path: Option<String>,
     backend_url: Option<String>,
+    access_code: Option<String>,
 ) -> Result<serde_json::Value, String> {
-    crate::network_gateway::dispatch_process(prompt, data_type, file_path, backend_url).await
+    crate::network_gateway::dispatch_process(prompt, data_type, file_path, backend_url, access_code).await
 }
 
 #[tauri::command]
@@ -74,12 +83,13 @@ pub fn start_voice_recording() -> Result<(), String> {
 pub async fn stop_voice_recording(
     transcribe: Option<bool>,
     backend_url: Option<String>,
+    access_code: Option<String>,
 ) -> Result<serde_json::Value, String> {
     let audio_path = crate::audio_engine::stop_recording()?;
     let should_transcribe = transcribe.unwrap_or(true);
 
     if should_transcribe {
-        match crate::network_gateway::dispatch_transcribe(audio_path.clone(), backend_url).await {
+        match crate::network_gateway::dispatch_transcribe(audio_path.clone(), backend_url, access_code).await {
             Ok(transcription) => Ok(serde_json::json!({
                 "status": "success",
                 "audio_path": audio_path,
@@ -105,7 +115,7 @@ pub async fn stop_voice_recording(
 pub async fn synthesize_speech(
     text: String,
     backend_url: Option<String>,
+    access_code: Option<String>,
 ) -> Result<Vec<u8>, String> {
-    crate::network_gateway::dispatch_speak(text, backend_url).await
+    crate::network_gateway::dispatch_speak(text, backend_url, access_code).await
 }
-

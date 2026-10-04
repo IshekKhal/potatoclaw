@@ -34,6 +34,7 @@
 
       <!-- Window Controls -->
       <div class="hud-header-actions">
+        <button id="btnSettings" class="btn-header-control" title="Settings (Backend URL & Access Code)">⚙️</button>
         <button id="btnMinHud" class="btn-header-control" title="Minimize (Esc)">—</button>
         <button id="btnCloseHud" class="btn-header-control btn-close" title="Close">✕</button>
       </div>
@@ -103,6 +104,42 @@
         <span><span class="hint-badge">Esc</span> Dismiss</span>
       </div>
     </footer>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="settings-modal hidden">
+      <div class="settings-card">
+        <div class="settings-header">
+          <div class="settings-title">
+            <span>⚙️</span>
+            <span>Connection Settings</span>
+          </div>
+          <button id="btnCloseSettings" class="btn-header-control btn-close" title="Close Settings">✕</button>
+        </div>
+        <div class="settings-body">
+          <div class="form-group">
+            <label for="settingBackendUrl">Cloud Backend URL</label>
+            <input type="text" id="settingBackendUrl" placeholder="http://127.0.0.1:8000" spellcheck="false" autocomplete="off" />
+            <span class="field-hint">e.g. https://your-backend.onrender.com or http://127.0.0.1:8000</span>
+          </div>
+          <div class="form-group">
+            <label for="settingAccessCode">Access Code PIN</label>
+            <div class="input-with-action">
+              <input type="password" id="settingAccessCode" placeholder="Enter PIN (e.g. 849201)" autocomplete="off" />
+              <button id="btnToggleAccessCode" class="btn-input-action" type="button" title="Show/Hide PIN">👁️</button>
+            </div>
+            <span class="field-hint">Must match ACCESS_CODE configured on your Render backend</span>
+          </div>
+          <div id="connectionStatus" class="connection-status idle">
+            <span class="status-dot"></span>
+            <span id="connectionStatusText">Status: Not tested</span>
+          </div>
+        </div>
+        <div class="settings-footer">
+          <button id="btnTestConnection" class="btn-action" type="button">Test Connection</button>
+          <button id="btnSaveSettings" class="btn-send" type="button">Save Settings</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="js/hud.js"></script>

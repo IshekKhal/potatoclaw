@@ -1,10 +1,10 @@
-use tauri::{Emitter, Manager};
-use tauri_plugin_global_shortcut::{Builder as ShortcutBuilder, Code, Modifiers, ShortcutState};
+use tauri::{AppHandle, Emitter, Manager};
+use tauri_plugin_global_shortcut::{
+    Builder as ShortcutBuilder, Code, GlobalShortcutExt, Modifiers, ShortcutState,
+};
 
 pub fn build_shortcut_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
     ShortcutBuilder::new()
-        .with_shortcuts(["alt+shift+1", "alt+shift+2", "alt+shift+v", "alt+shift+p"])
-        .expect("Failed to register global shortcuts")
         .with_handler(|app, shortcut, event| {
             if event.state == ShortcutState::Pressed {
                 let matches_mod = shortcut.mods.contains(Modifiers::ALT)
@@ -38,4 +38,13 @@ pub fn build_shortcut_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
             }
         })
         .build()
+}
+
+pub fn register_hotkeys(app: &AppHandle) {
+    let shortcuts = ["alt+shift+p", "alt+shift+1", "alt+shift+2", "alt+shift+v"];
+    for sc in shortcuts {
+        if let Err(err) = app.global_shortcut().register(sc) {
+            eprintln!("[WARN] Failed to register global shortcut '{}': {}", sc, err);
+        }
+    }
 }

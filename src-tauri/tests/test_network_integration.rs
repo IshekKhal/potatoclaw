@@ -1,6 +1,8 @@
 use potatoclaw_lib::audio_engine::write_test_wav;
 use potatoclaw_lib::memory_shield::{get_active_foreground_pid, trim_idle_background_processes};
-use potatoclaw_lib::network_gateway::{dispatch_process, dispatch_speak, dispatch_transcribe};
+use potatoclaw_lib::network_gateway::{
+    dispatch_process, dispatch_speak, dispatch_transcribe, dispatch_verify_auth,
+};
 use potatoclaw_lib::screen_capture::capture_screen_region;
 use std::fs;
 use std::path::Path;
@@ -8,16 +10,83 @@ use std::path::Path;
 const BACKEND_URL: &str = "http://127.0.0.1:8000";
 
 #[tokio::test]
+async fn test_verify_connection_pipeline() {
+    let access_code = std::env::var("ACCESS_CODE").unwrap_or_else(|_| {
+        for candidate in &["../.env", ".env", "../../.env"] {
+            if let Ok(content) = std::fs::read_to_string(candidate) {
+                for line in content.lines() {
+                    let trimmed = line.trim();
+                    if trimmed.starts_with("ACCESS_CODE=") {
+                        let code = trimmed
+                            .trim_start_matches("ACCESS_CODE=")
+                            .trim()
+                            .trim_matches('"')
+                            .trim_matches('\'');
+                        if !code.is_empty() {
+                            return code.to_string();
+                        }
+                    }
+                }
+            }
+        }
+        "849201".to_string()
+    });
+
+    // Valid access code probe
+    let result = dispatch_verify_auth(Some(BACKEND_URL.to_string()), Some(access_code)).await;
+    assert!(
+        result.is_ok(),
+        "Valid access code must be authorized: {:?}",
+        result.err()
+    );
+    let json = result.unwrap();
+    assert_eq!(
+        json.get("status").and_then(|s| s.as_str()),
+        Some("authorized"),
+        "Status must be 'authorized'"
+    );
+
+    // Invalid access code probe
+    let invalid_result = dispatch_verify_auth(
+        Some(BACKEND_URL.to_string()),
+        Some("invalid_code_999999".to_string()),
+    )
+    .await;
+    assert!(
+        invalid_result.is_err(),
+        "Invalid access code must return Err"
+    );
+    let err_msg = invalid_result.unwrap_err();
+    assert!(
+        err_msg.to_lowercase().contains("unauthorized") || err_msg.contains("401"),
+        "Error message must indicate unauthorized or HTTP 401: {}",
+        err_msg
+    );
+    println!("test_verify_connection_pipeline PASSED.");
+}
+
+#[tokio::test]
 async fn test_text_reasoning_pipeline() {
     let prompt = "Write a 1-line Python lambda to square a number.".to_string();
-    let result = dispatch_process(prompt, "text".to_string(), None, Some(BACKEND_URL.to_string())).await;
+    let result = dispatch_process(
+        prompt,
+        "text".to_string(),
+        None,
+        Some(BACKEND_URL.to_string()),
+        None,
+    )
+    .await;
 
     assert!(result.is_ok(), "Text reasoning request must succeed: {:?}", result.err());
     let json = result.unwrap();
 
     assert_eq!(json.get("status").and_then(|s| s.as_str()), Some("success"));
     let sol_type = json.get("type").and_then(|t| t.as_str());
-    assert!(sol_type == Some("text_solution") || sol_type == Some("code_solution"), "Expected text_solution or code_solution, got: {:?}", sol_type);
+    assert!(
+        sol_type == Some("text_solution") || sol_type == Some("code_solution"),
+        "Expected text_solution or code_solution, got: {:?}",
+        sol_type
+    );
 
     let answer = json.get("answer").and_then(|a| a.as_str()).unwrap_or("");
     assert!(!answer.is_empty(), "Answer from Gemma 4 reasoning must not be empty");
@@ -41,7 +110,9 @@ async fn test_tabular_analysis_pipeline() {
         "tabular".to_string(),
         Some(temp_csv.to_string_lossy().to_string()),
         Some(BACKEND_URL.to_string()),
-    ).await;
+        None,
+    )
+    .await;
 
     let _ = fs::remove_file(&temp_csv);
 
@@ -75,7 +146,9 @@ async fn test_multimodal_vision_pipeline() {
         "image".to_string(),
         Some(temp_png.to_string_lossy().to_string()),
         Some(BACKEND_URL.to_string()),
-    ).await;
+        None,
+    )
+    .await;
 
     let _ = fs::remove_file(&temp_png);
 
@@ -93,7 +166,7 @@ async fn test_multimodal_vision_pipeline() {
 #[tokio::test]
 async fn test_speech_synthesis_pipeline() {
     let text = "PotatoClaw systems verified and ready.".to_string();
-    let result = dispatch_speak(text, Some(BACKEND_URL.to_string())).await;
+    let result = dispatch_speak(text, Some(BACKEND_URL.to_string()), None).await;
 
     assert!(result.is_ok(), "Speech synthesis request must succeed: {:?}", result.err());
     let audio_bytes = result.unwrap();
@@ -108,7 +181,12 @@ async fn test_transcribe_audio_pipeline() {
     let gen_res = write_test_wav(&temp_wav, 16000, 500, 440.0);
     assert!(gen_res.is_ok(), "Failed to generate test WAV file: {:?}", gen_res.err());
 
-    let result = dispatch_transcribe(temp_wav.to_string_lossy().to_string(), Some(BACKEND_URL.to_string())).await;
+    let result = dispatch_transcribe(
+        temp_wav.to_string_lossy().to_string(),
+        Some(BACKEND_URL.to_string()),
+        None,
+    )
+    .await;
     let _ = fs::remove_file(&temp_wav);
 
     assert!(result.is_ok(), "Groq Whisper transcription must complete: {:?}", result.err());
