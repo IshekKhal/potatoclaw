@@ -47,9 +47,16 @@
         <div class="staged-header-row">
           <span class="staged-label">Staged Context</span>
           <span id="stagedCountHint" class="staged-label" style="font-size: 10px;">0 attached</span>
-        </div>
         <div id="staged-badges" class="staged-badges-container">
           <span class="staged-empty-hint">Drop files on DropBox pill, press Alt+Shift+1 (clipboard), or Alt+Shift+2 (snip) to stage context</span>
+        </div>
+        <!-- Scrollable Hover Preview Popover (1.5s delay) -->
+        <div id="badgePreviewPopover" class="badge-preview-popover hidden">
+          <div class="popover-header">
+            <span class="popover-title" id="popoverTitle">📋 Clipboard Content</span>
+            <span class="popover-length" id="popoverLength">0 chars</span>
+          </div>
+          <div class="popover-content" id="popoverContent"></div>
         </div>
       </section>
 

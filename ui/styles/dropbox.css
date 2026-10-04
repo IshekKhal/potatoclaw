@@ -55,8 +55,8 @@ html, body {
 .dropbox-pill.drag-over {
   border-color: var(--accent-green);
   background: #064e3b;
-  transform: scale(1.08);
-  box-shadow: 0 0 16px rgba(16, 185, 129, 0.5);
+  transform: scale(1.05);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.45);
 }
 
 .dropbox-pill.drag-over::before {
@@ -66,7 +66,7 @@ html, body {
 /* Trimming Pulse Animation */
 .dropbox-pill.trimming {
   border-color: #38bdf8;
-  box-shadow: 0 0 18px rgba(56, 189, 248, 0.7);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.55);
   animation: trim-pulse 0.8s ease-in-out;
 }
 
@@ -75,7 +75,7 @@ html, body {
     transform: scale(1);
   }
   50% {
-    transform: scale(1.12);
+    transform: scale(1.05);
   }
 }
 

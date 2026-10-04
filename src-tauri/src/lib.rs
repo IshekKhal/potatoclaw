@@ -24,6 +24,10 @@ pub fn run() {
                 let _ = window.set_shadow(false);
                 let _ = window.set_decorations(false);
             }
+            if let Some(window) = app.get_webview_window("hud") {
+                let _ = window.set_shadow(false);
+                let _ = window.set_decorations(false);
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -37,7 +41,8 @@ pub fn run() {
             send_process_payload,
             start_voice_recording,
             stop_voice_recording,
-            synthesize_speech
+            synthesize_speech,
+            get_clipboard_text
         ])
         .run(tauri::generate_context!())
         .expect("error while running PotatoClaw application");

@@ -15,7 +15,10 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         .item(&quit_item)
         .build()?;
 
-    let _tray = TrayIconBuilder::new()
+    let icon = app.default_window_icon().cloned().ok_or("Failed to get window icon")?;
+
+    let _tray = TrayIconBuilder::with_id("potatoclaw-tray")
+        .icon(icon)
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| {

@@ -11,7 +11,8 @@ pub fn build_shortcut_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
                     && shortcut.mods.contains(Modifiers::SHIFT);
 
                 if matches_mod && shortcut.key == Code::Digit1 {
-                    let _ = app.emit("trigger-clipboard-ingest", ());
+                    let text = crate::commands::get_clipboard_text().unwrap_or_default();
+                    let _ = app.emit("trigger-clipboard-ingest", serde_json::json!({ "text": text }));
                     if let Some(hud) = app.get_webview_window("hud") {
                         let _ = hud.show();
                         let _ = hud.set_focus();

@@ -50,12 +50,52 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnClearStaged = document.getElementById('btnClearStaged');
   const btnSendPrompt = document.getElementById('btnSendPrompt');
 
-  // Staged state array: [{ id, type, name, path, preview, meta }]
+  // Badge Preview Popover elements
+  const badgePreviewPopover = document.getElementById('badgePreviewPopover');
+  const popoverTitle = document.getElementById('popoverTitle');
+  const popoverLength = document.getElementById('popoverLength');
+  const popoverContent = document.getElementById('popoverContent');
+
+  let hoverTimer = null;
+
+  const hidePopover = () => {
+    if (hoverTimer) {
+      clearTimeout(hoverTimer);
+      hoverTimer = null;
+    }
+    if (badgePreviewPopover) {
+      badgePreviewPopover.classList.add('hidden');
+    }
+  };
+
+  if (badgePreviewPopover) {
+    badgePreviewPopover.addEventListener('mouseleave', () => {
+      hidePopover();
+    });
+  }
+
+  // Extract first few words (up to 5 words or 26 chars)
+  const getFirstFewWords = (text, maxWords = 5, maxChars = 26) => {
+    if (!text) return 'Clipboard text';
+    const clean = text.replace(/[\r\n\t]+/g, ' ').trim();
+    const words = clean.split(/\s+/);
+    let preview = words.slice(0, maxWords).join(' ');
+    if (words.length > maxWords || preview.length > maxChars) {
+      if (preview.length > maxChars) {
+        preview = preview.substring(0, maxChars).trim();
+      }
+      preview += '...';
+    }
+    return preview;
+  };
+
+  // Staged state array: [{ id, type, name, path, content, meta }]
   let stagedItems = [];
   let isRecording = false;
 
   // Window hide helper
   const hideHud = () => {
+    hidePopover();
     if (window.__TAURI__ && window.__TAURI__.core) {
       window.__TAURI__.core.invoke('hide_window', { label: 'hud' })
         .catch(err => console.error('Failed to hide HUD:', err));
@@ -174,7 +214,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Render Staged Badges
+  // Helper to emit staged count updates to DropBox pill
+  const notifyBadgeCountChanged = () => {
+    if (window.__TAURI__ && window.__TAURI__.event) {
+      window.__TAURI__.event.emit('staged-count-changed', { count: stagedItems.length }).catch(console.error);
+    }
+  };
+
+  // Render Staged Badges with Universal Icon Mapping
   const renderStagedBadges = () => {
     stagedBadgesContainer.innerHTML = '';
     if (stagedItems.length === 0) {
@@ -183,6 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
       hint.textContent = 'Drop files on DropBox pill, press Alt+Shift+1 (clipboard), or Alt+Shift+2 (snip) to stage context';
       stagedBadgesContainer.appendChild(hint);
       if (stagedCountHint) stagedCountHint.textContent = '0 attached';
+      notifyBadgeCountChanged();
       return;
     }
 
@@ -196,9 +244,60 @@ document.addEventListener('DOMContentLoaded', () => {
       badge.dataset.id = item.id;
 
       let icon = '📎';
-      if (item.type === 'file') icon = '📄';
-      else if (item.type === 'snip') icon = '✂️';
-      else if (item.type === 'clipboard') icon = '📋';
+      const p = (item.path || item.name || '').toLowerCase();
+      if (item.type === 'snip') {
+        icon = '✂️';
+      } else if (item.type === 'clipboard') {
+        icon = '📋';
+      } else if (item.type === 'url') {
+        icon = '🌐';
+      } else if (p.endsWith('.csv') || p.endsWith('.tsv')) {
+        icon = '📊';
+      } else if (
+        p.endsWith('.png') ||
+        p.endsWith('.jpg') ||
+        p.endsWith('.jpeg') ||
+        p.endsWith('.webp') ||
+        p.endsWith('.bmp') ||
+        p.endsWith('.gif') ||
+        p.endsWith('.svg')
+      ) {
+        icon = '🖼️';
+      } else if (
+        p.endsWith('.py') ||
+        p.endsWith('.js') ||
+        p.endsWith('.ts') ||
+        p.endsWith('.rs') ||
+        p.endsWith('.c') ||
+        p.endsWith('.cpp') ||
+        p.endsWith('.h') ||
+        p.endsWith('.cs') ||
+        p.endsWith('.java') ||
+        p.endsWith('.go') ||
+        p.endsWith('.html') ||
+        p.endsWith('.css') ||
+        p.endsWith('.json') ||
+        p.endsWith('.yaml') ||
+        p.endsWith('.toml') ||
+        p.endsWith('.xml') ||
+        p.endsWith('.sql') ||
+        p.endsWith('.sh') ||
+        p.endsWith('.bat') ||
+        p.endsWith('.ps1') ||
+        p.endsWith('.log') ||
+        p.endsWith('.env')
+      ) {
+        icon = '💻';
+      } else if (
+        p.endsWith('.pdf') ||
+        p.endsWith('.docx') ||
+        p.endsWith('.txt') ||
+        p.endsWith('.md')
+      ) {
+        icon = '📄';
+      } else {
+        icon = '📦';
+      }
 
       badge.innerHTML = `
         <span class="context-badge-icon">${icon}</span>
@@ -206,13 +305,66 @@ document.addEventListener('DOMContentLoaded', () => {
         <button class="context-badge-remove" title="Remove">✕</button>
       `;
 
+      // 1.5s hover preview popover for clipboard or text content
+      if (item.content) {
+        badge.addEventListener('mouseenter', () => {
+          if (hoverTimer) clearTimeout(hoverTimer);
+          hoverTimer = setTimeout(() => {
+            if (!badgePreviewPopover) return;
+            const rect = badge.getBoundingClientRect();
+            const popoverWidth = 340;
+
+            let left = rect.left;
+            if (left + popoverWidth > window.innerWidth - 16) {
+              left = window.innerWidth - popoverWidth - 16;
+            }
+            if (left < 10) left = 10;
+
+            let top = rect.bottom + 6;
+            if (top + 180 > window.innerHeight - 10) {
+              top = Math.max(10, rect.top - 190);
+            }
+
+            badgePreviewPopover.style.left = `${left}px`;
+            badgePreviewPopover.style.top = `${top}px`;
+
+            if (popoverTitle) {
+              popoverTitle.textContent = item.type === 'clipboard' ? '📋 Clipboard Content' : '📄 Text Content';
+            }
+            if (popoverLength) {
+              popoverLength.textContent = `${item.content.length} chars`;
+            }
+            if (popoverContent) {
+              popoverContent.textContent = item.content;
+            }
+
+            badgePreviewPopover.classList.remove('hidden');
+          }, 1500);
+        });
+
+        badge.addEventListener('mouseleave', (e) => {
+          if (hoverTimer) {
+            clearTimeout(hoverTimer);
+            hoverTimer = null;
+          }
+          const related = e.relatedTarget;
+          if (badgePreviewPopover && (related === badgePreviewPopover || badgePreviewPopover.contains(related))) {
+            return;
+          }
+          hidePopover();
+        });
+      }
+
       badge.querySelector('.context-badge-remove').addEventListener('click', (e) => {
         e.stopPropagation();
+        hidePopover();
         removeStagedItem(item.id);
       });
 
       stagedBadgesContainer.appendChild(badge);
     });
+
+    notifyBadgeCountChanged();
   };
 
   const addStagedItem = (item) => {
@@ -239,6 +391,7 @@ document.addEventListener('DOMContentLoaded', () => {
     stagedItems = [];
     renderStagedBadges();
     composerInput.value = '';
+    notifyBadgeCountChanged();
     if (window.__TAURI__ && window.__TAURI__.event) {
       window.__TAURI__.event.emit('badges-cleared').catch(console.error);
     }
@@ -349,6 +502,147 @@ document.addEventListener('DOMContentLoaded', () => {
     btnVoiceToggle.addEventListener('click', toggleVoice);
   }
 
+  const escapeHtml = (str) => {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  };
+
+  const formatMarkdownInline = (text) => {
+    // 1. Math inline: $...$
+    let out = text.replace(/\$([^$\n]+)\$/g, '<span class="math-inline">$1</span>');
+    // 2. Bold: **...**
+    out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    // 3. Italic: *...*
+    out = out.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    // 4. Inline code: `...`
+    out = out.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
+    return out;
+  };
+
+  const renderStructuredContent = (container, rawText) => {
+    // 1. Tokenize code blocks: ```lang\ncode\n```
+    const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g;
+    let lastIndex = 0;
+    let match;
+
+    const renderTextBlock = (textBlock) => {
+      if (!textBlock || !textBlock.trim()) return;
+
+      const lines = textBlock.split('\n');
+      let currentList = null;
+
+      for (let i = 0; i < lines.length; i++) {
+        const rawLine = lines[i];
+        const trimmed = rawLine.trim();
+
+        if (!trimmed) {
+          currentList = null;
+          continue;
+        }
+
+        // Headings
+        if (trimmed.startsWith('### ')) {
+          currentList = null;
+          const h3 = document.createElement('h3');
+          h3.innerHTML = formatMarkdownInline(escapeHtml(trimmed.substring(4)));
+          container.appendChild(h3);
+        } else if (trimmed.startsWith('## ')) {
+          currentList = null;
+          const h2 = document.createElement('h2');
+          h2.innerHTML = formatMarkdownInline(escapeHtml(trimmed.substring(3)));
+          container.appendChild(h2);
+        } else if (trimmed.startsWith('# ')) {
+          currentList = null;
+          const h1 = document.createElement('h1');
+          h1.innerHTML = formatMarkdownInline(escapeHtml(trimmed.substring(2)));
+          container.appendChild(h1);
+        } else if (trimmed.startsWith('> ')) {
+          // Blockquote
+          currentList = null;
+          const bq = document.createElement('blockquote');
+          bq.innerHTML = formatMarkdownInline(escapeHtml(trimmed.substring(2)));
+          container.appendChild(bq);
+        } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+          // Bullet list item
+          if (!currentList) {
+            currentList = document.createElement('ul');
+            container.appendChild(currentList);
+          }
+          const li = document.createElement('li');
+          li.innerHTML = formatMarkdownInline(escapeHtml(trimmed.substring(2)));
+          currentList.appendChild(li);
+        } else {
+          // Regular paragraph
+          currentList = null;
+          const p = document.createElement('p');
+          p.innerHTML = formatMarkdownInline(escapeHtml(trimmed));
+          container.appendChild(p);
+        }
+      }
+    };
+
+    const renderTextSegment = (segment) => {
+      if (!segment || !segment.trim()) return;
+
+      // Check for LaTeX math blocks: $$...$$
+      const mathBlockRegex = /\$\$([\s\S]+?)\$\$/g;
+      let mathLastIdx = 0;
+      let mathMatch;
+
+      while ((mathMatch = mathBlockRegex.exec(segment)) !== null) {
+        const textBeforeMath = segment.substring(mathLastIdx, mathMatch.index);
+        renderTextBlock(textBeforeMath);
+
+        const mathFormula = mathMatch[1].trim();
+        const mathDiv = document.createElement('div');
+        mathDiv.className = 'math-block';
+        mathDiv.textContent = mathFormula;
+        container.appendChild(mathDiv);
+
+        mathLastIdx = mathMatch.index + mathMatch[0].length;
+      }
+
+      const textAfterMath = segment.substring(mathLastIdx);
+      renderTextBlock(textAfterMath);
+    };
+
+    while ((match = codeBlockRegex.exec(rawText)) !== null) {
+      const textBefore = rawText.substring(lastIndex, match.index);
+      renderTextSegment(textBefore);
+
+      const lang = match[1] || 'code';
+      const codeText = match[2];
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'code-block-wrapper';
+      wrapper.innerHTML = `
+        <div class="code-block-header">
+          <span class="code-lang">${escapeHtml(lang)}</span>
+          <button class="btn-copy-code">Copy</button>
+        </div>
+        <pre class="code-content"><code>${escapeHtml(codeText)}</code></pre>
+      `;
+
+      const copyBtn = wrapper.querySelector('.btn-copy-code');
+      copyBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(codeText).then(() => {
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+        }).catch(err => console.error('Copy failed:', err));
+      });
+
+      container.appendChild(wrapper);
+      lastIndex = match.index + match[0].length;
+    }
+
+    const remainingText = rawText.substring(lastIndex);
+    renderTextSegment(remainingText);
+  };
+
   // Helper to append message into #chat-feed with code blocks, copy buttons, TabPFN metrics, and audio bar
   const appendMessage = (role, content, options = {}) => {
     const msgDiv = document.createElement('div');
@@ -396,57 +690,8 @@ document.addEventListener('DOMContentLoaded', () => {
       msgDiv.appendChild(summaryDiv);
     }
 
-    // Parse markdown-style code blocks: ```lang\ncode\n```
-    const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g;
-    let lastIndex = 0;
-    let match;
-
-    if (codeBlockRegex.test(content)) {
-      codeBlockRegex.lastIndex = 0;
-      while ((match = codeBlockRegex.exec(content)) !== null) {
-        const textBefore = content.substring(lastIndex, match.index);
-        if (textBefore.trim()) {
-          const p = document.createElement('p');
-          p.textContent = textBefore;
-          msgDiv.appendChild(p);
-        }
-
-        const lang = match[1] || 'plaintext';
-        const codeText = match[2];
-
-        const wrapper = document.createElement('div');
-        wrapper.className = 'code-block-wrapper';
-        wrapper.innerHTML = `
-          <div class="code-block-header">
-            <span class="code-lang">${lang}</span>
-            <button class="btn-copy-code">Copy</button>
-          </div>
-          <pre class="code-content"><code>${escapeHtml(codeText)}</code></pre>
-        `;
-
-        const copyBtn = wrapper.querySelector('.btn-copy-code');
-        copyBtn.addEventListener('click', () => {
-          navigator.clipboard.writeText(codeText).then(() => {
-            copyBtn.textContent = 'Copied!';
-            setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
-          }).catch(err => console.error('Copy failed:', err));
-        });
-
-        msgDiv.appendChild(wrapper);
-        lastIndex = match.index + match[0].length;
-      }
-
-      const remainingText = content.substring(lastIndex);
-      if (remainingText.trim()) {
-        const p = document.createElement('p');
-        p.textContent = remainingText;
-        msgDiv.appendChild(p);
-      }
-    } else {
-      const p = document.createElement('p');
-      p.textContent = content;
-      msgDiv.appendChild(p);
-    }
+    // Structured rendering of headings, bullet lists, math formulas, and code blocks
+    renderStructuredContent(msgDiv, content);
 
     // ElevenLabs audio playback bar
     if (options.audio) {
@@ -545,15 +790,6 @@ document.addEventListener('DOMContentLoaded', () => {
     chatFeed.scrollTop = chatFeed.scrollHeight;
   };
 
-  const escapeHtml = (str) => {
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
-  };
-
   // Send Prompt Handler with Native Tauri Process Dispatching
   const sendPrompt = async () => {
     let text = composerInput.value.trim();
@@ -563,25 +799,39 @@ document.addEventListener('DOMContentLoaded', () => {
     let dataType = 'text';
     let filePath = null;
 
-    // Inspect staged items to determine payload modality
+    // Inspect staged items to determine payload modality and primary file path
     for (const item of stagedSnapshot) {
       const p = (item.path || item.name || '').toLowerCase();
-      if (item.type === 'file' && p.endsWith('.csv')) {
-        dataType = 'tabular';
-        filePath = item.path;
-        break;
-      } else if (
+      if (
         item.type === 'snip' ||
         p.endsWith('.png') ||
         p.endsWith('.jpg') ||
         p.endsWith('.jpeg') ||
-        p.endsWith('.webp')
+        p.endsWith('.webp') ||
+        p.endsWith('.bmp') ||
+        p.endsWith('.gif') ||
+        p.endsWith('.svg')
       ) {
         dataType = 'image';
         filePath = item.path;
         break;
-      } else if (item.type === 'clipboard' && item.meta && item.meta.content) {
-        text = text ? `${text}\n\n[Clipboard Context]:\n${item.meta.content}` : item.meta.content;
+      } else if (p.endsWith('.csv') || p.endsWith('.tsv')) {
+        dataType = 'tabular';
+        filePath = item.path;
+        break;
+      } else if (item.path) {
+        dataType = 'text';
+        filePath = item.path;
+      }
+    }
+
+    // Compound context: attach clipboard text or referenced URLs into prompt
+    for (const item of stagedSnapshot) {
+      const c = item.content || (item.meta && item.meta.content);
+      if (item.type === 'clipboard' && c) {
+        text = text ? `${text}\n\n[Clipboard Context]:\n${c}` : `[Clipboard Context]:\n${c}`;
+      } else if (item.type === 'url') {
+        text = text ? `${text}\n\n[Referenced URL]:\n${item.path || item.name}` : `[Referenced URL]:\n${item.path || item.name}`;
       }
     }
 
@@ -592,21 +842,30 @@ document.addEventListener('DOMContentLoaded', () => {
     composerInput.value = '';
     stagedItems = [];
     renderStagedBadges();
+    notifyBadgeCountChanged();
     if (window.__TAURI__ && window.__TAURI__.event) {
       window.__TAURI__.event.emit('badges-cleared').catch(console.error);
     }
 
-    // Display loading indicator card
+    // Display clean loading indicator card with spinning loader
     const loadingCard = document.createElement('div');
     loadingCard.className = 'chat-message assistant-message loading-card';
     loadingCard.innerHTML = `
       <div style="display:flex; align-items:center; gap:8px;">
-        <span style="display:inline-block; width:12px; height:12px; border:2px solid #f59e0b; border-top-color:transparent; border-radius:50%; animation:spin 0.8s linear infinite;"></span>
-        <span>Analyzing via Gemma 4 / TabPFN (${dataType})...</span>
+        <span class="spinner-icon"></span>
+        <span style="color:#cbd5e1; font-weight:500;">Analyzing...</span>
       </div>
     `;
     chatFeed.appendChild(loadingCard);
     chatFeed.scrollTop = chatFeed.scrollHeight;
+
+    // Collect all attached file paths
+    const filePaths = [];
+    for (const item of stagedSnapshot) {
+      if (item.path) {
+        filePaths.push(item.path);
+      }
+    }
 
     if (window.__TAURI__ && window.__TAURI__.core) {
       try {
@@ -615,6 +874,7 @@ document.addEventListener('DOMContentLoaded', () => {
           prompt: text,
           dataType: dataType,
           filePath: filePath,
+          filePaths: filePaths,
           backendUrl: cfg.backendUrl,
           accessCode: cfg.accessCode,
         });
@@ -660,25 +920,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Cross-Window Event Listeners
   if (window.__TAURI__ && window.__TAURI__.event) {
-    // 1. Files dropped on DropBox pill (Window 1 -> Window 2)
+    // 1. Files dropped on DropBox pill (Window 1 -> Window 2, Silent Accumulator)
     window.__TAURI__.event.listen('stage-files', (event) => {
       const paths = event.payload && event.payload.paths ? event.payload.paths : [];
+      const isUrl = event.payload && event.payload.isUrl;
+      const isImage = event.payload && event.payload.isImage;
       paths.forEach((filePath) => {
         const fileName = filePath.replace(/^.*[\\\/]/, '');
+        const lower = filePath.toLowerCase();
+        const isImg = isImage || lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.webp') || lower.endsWith('.bmp') || lower.endsWith('.gif') || lower.endsWith('.svg');
         addStagedItem({
-          type: 'file',
+          type: isImg ? 'image' : (isUrl ? 'url' : 'file'),
           name: fileName,
           path: filePath,
         });
       });
-      // Bring HUD to front
-      if (window.__TAURI__.core) {
-        window.__TAURI__.core.invoke('show_window', { label: 'hud' })
-          .catch(err => console.error('Failed to show HUD:', err));
+      // HUD is not auto-summoned; staged items accumulate silently
+    });
+
+    // 2. Browser text drag-and-drop from Chrome / Edge
+    window.__TAURI__.event.listen('stage-text', (event) => {
+      const text = event.payload && event.payload.text ? event.payload.text : '';
+      if (text) {
+        const trimmed = text.trim();
+        const preview = getFirstFewWords(trimmed);
+        addStagedItem({
+          type: 'clipboard',
+          name: `"${preview}"`,
+          path: null,
+          content: trimmed,
+          meta: { length: trimmed.length, content: trimmed },
+        });
       }
     });
 
-    // 2. Snip captured from Screen Snipper (Window 3 -> Window 2)
+    // 3. Snip captured from Screen Snipper (Window 3 -> Window 2)
     window.__TAURI__.event.listen('snip-captured', (event) => {
       const { filePath, width, height } = event.payload || {};
       const fileName = filePath ? filePath.replace(/^.*[\\\/]/, '') : 'screenshot.png';
@@ -690,25 +966,46 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
-    // 3. Alt+Shift+1 Clipboard Ingest
-    window.__TAURI__.event.listen('trigger-clipboard-ingest', async () => {
+    // 4. Alt+Shift+1 Clipboard Ingest (Native Win32 IPC + Event payload)
+    window.__TAURI__.event.listen('trigger-clipboard-ingest', async (event) => {
       try {
-        const text = await navigator.clipboard.readText();
+        let text = (event.payload && typeof event.payload.text === 'string') ? event.payload.text : null;
+        if (!text) {
+          if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke) {
+            text = await window.__TAURI__.core.invoke('get_clipboard_text');
+          } else if (window.__TAURI__ && window.__TAURI__.invoke) {
+            text = await window.__TAURI__.invoke('get_clipboard_text');
+          } else if (navigator.clipboard && navigator.clipboard.readText) {
+            text = await navigator.clipboard.readText();
+          }
+        }
+
         if (text && text.trim()) {
-          const preview = text.length > 28 ? text.substring(0, 25) + '...' : text;
+          const trimmed = text.trim();
+          const preview = getFirstFewWords(trimmed);
           addStagedItem({
             type: 'clipboard',
-            name: `Clipboard: "${preview}"`,
+            name: `"${preview}"`,
             path: null,
-            meta: { length: text.length, content: text },
+            content: trimmed,
+            meta: { length: trimmed.length, content: trimmed },
+          });
+        } else {
+          addStagedItem({
+            type: 'clipboard',
+            name: 'Empty Clipboard',
+            path: null,
+            content: '(Clipboard is empty)',
+            meta: { length: 0 },
           });
         }
       } catch (err) {
-        // Fallback badge if clipboard permission not yet granted
+        console.warn('Native clipboard retrieval fallback:', err);
         addStagedItem({
           type: 'clipboard',
           name: 'Clipboard staged',
           path: null,
+          content: 'Clipboard text was staged',
         });
       }
     });

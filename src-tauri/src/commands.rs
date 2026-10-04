@@ -68,10 +68,11 @@ pub async fn send_process_payload(
     prompt: String,
     data_type: String,
     file_path: Option<String>,
+    file_paths: Option<Vec<String>>,
     backend_url: Option<String>,
     access_code: Option<String>,
 ) -> Result<serde_json::Value, String> {
-    crate::network_gateway::dispatch_process(prompt, data_type, file_path, backend_url, access_code).await
+    crate::network_gateway::dispatch_process(prompt, data_type, file_path, file_paths, backend_url, access_code).await
 }
 
 #[tauri::command]
@@ -119,3 +120,62 @@ pub async fn synthesize_speech(
 ) -> Result<Vec<u8>, String> {
     crate::network_gateway::dispatch_speak(text, backend_url, access_code).await
 }
+
+#[tauri::command]
+pub fn get_clipboard_text() -> Result<String, String> {
+    unsafe {
+        use windows::Win32::Foundation::HGLOBAL;
+        use windows::Win32::System::DataExchange::{CloseClipboard, GetClipboardData, OpenClipboard};
+        use windows::Win32::System::Memory::{GlobalLock, GlobalUnlock};
+
+        let mut opened = false;
+        for _ in 0..10 {
+            if OpenClipboard(None).is_ok() {
+                opened = true;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        if !opened {
+            return Err("Failed to open system clipboard after retries".to_string());
+        }
+
+        // CF_UNICODETEXT = 13, CF_TEXT = 1
+        let handle = match GetClipboardData(13) {
+            Ok(h) => h,
+            Err(_) => match GetClipboardData(1) {
+                Ok(h) => h,
+                Err(e) => {
+                    let _ = CloseClipboard();
+                    return Err(format!("No text in clipboard: {}", e));
+                }
+            },
+        };
+
+        if handle.0.is_null() {
+            let _ = CloseClipboard();
+            return Err("Clipboard handle is null".to_string());
+        }
+
+        let ptr = GlobalLock(HGLOBAL(handle.0));
+        if ptr.is_null() {
+            let _ = CloseClipboard();
+            return Err("Failed to lock clipboard memory".to_string());
+        }
+
+        let u16_ptr = ptr as *const u16;
+        let mut len = 0;
+        while *u16_ptr.add(len) != 0 {
+            len += 1;
+        }
+
+        let slice = std::slice::from_raw_parts(u16_ptr, len);
+        let text = String::from_utf16_lossy(slice);
+
+        let _ = GlobalUnlock(HGLOBAL(handle.0));
+        let _ = CloseClipboard();
+
+        Ok(text)
+    }
+}
+

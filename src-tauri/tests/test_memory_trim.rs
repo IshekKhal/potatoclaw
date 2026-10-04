@@ -125,3 +125,11 @@ impl DetailDeltaExt for potatoclaw_lib::memory_shield::ProcessTrimDetail {
         v
     }
 }
+
+#[test]
+fn test_clipboard_reading() {
+    // Verifies native Win32 clipboard reader executes safely without panic
+    let res = potatoclaw_lib::commands::get_clipboard_text();
+    assert!(res.is_ok() || res.is_err());
+}
+

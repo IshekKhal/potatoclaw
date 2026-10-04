@@ -139,7 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
     invoke('hide_window', { label: 'dropbox' }).catch(console.error);
   });
 
-  // Handle Drag-and-Drop Ingestion
+  // Handle Drag-and-Drop Ingestion (Silent Accumulator)
   const handleDroppedPaths = (paths) => {
     if (!paths || paths.length === 0) return;
     console.log('Files dropped into DropBox pill:', paths);
@@ -147,14 +147,11 @@ document.addEventListener('DOMContentLoaded', () => {
     pill.classList.remove('drag-over');
     updateBadge(stagedCount + paths.length);
 
-    // Emit stage-files event to global event bus
+    // Emit stage-files event to global event bus. HUD remains closed until explicitly opened.
     emit('stage-files', { paths }).catch(console.error);
-
-    // Bring HUD to view and focus
-    invoke('show_window', { label: 'hud' }).catch(console.error);
   };
 
-  // 1. Native Tauri v2 onDragDropEvent via WebviewWindow
+  // 1. Unified native Tauri v2 onDragDropEvent via WebviewWindow
   if (tauri && tauri.webviewWindow && tauri.webviewWindow.getCurrentWebviewWindow) {
     try {
       const currentWebview = tauri.webviewWindow.getCurrentWebviewWindow();
@@ -171,62 +168,118 @@ document.addEventListener('DOMContentLoaded', () => {
           handleDroppedPaths(payload.paths || []);
         }
       }).catch(err => {
-        console.warn('onDragDropEvent registration failed, falling back to event listeners:', err);
+        console.warn('onDragDropEvent registration failed:', err);
       });
     } catch (err) {
       console.warn('getCurrentWebviewWindow error:', err);
     }
   }
 
-  // 2. Fallback event listeners for tauri://drag-drop
+  // 2. Global event listeners for synchronized badge count
   if (tauri && tauri.event && tauri.event.listen) {
-    tauri.event.listen('tauri://drag-enter', () => {
-      pill.classList.add('drag-over');
+    tauri.event.listen('staged-count-changed', (event) => {
+      const count = (event.payload && typeof event.payload.count === 'number') ? event.payload.count : 0;
+      updateBadge(count);
     });
 
-    tauri.event.listen('tauri://drag-leave', () => {
-      pill.classList.remove('drag-over');
-    });
-
-    tauri.event.listen('tauri://drag-drop', (event) => {
-      pill.classList.remove('drag-over');
-      const payload = event.payload;
-      const paths = (payload && payload.paths) ? payload.paths : (Array.isArray(payload) ? payload : []);
-      handleDroppedPaths(paths);
-    });
-
-    // Reset staged count if HUD clears badges
     tauri.event.listen('badges-cleared', () => {
       updateBadge(0);
     });
   }
 
-  // 3. HTML5 Drag and Drop fallback
-  pill.addEventListener('dragover', (e) => {
+  // 3. HTML5 Drag and Drop with full browser support (Chrome, Edge, Firefox)
+  const onDragOver = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'copy';
+    }
     pill.classList.add('drag-over');
-  });
+  };
 
-  pill.addEventListener('dragleave', (e) => {
+  const onDragLeave = (e) => {
     e.preventDefault();
     e.stopPropagation();
     pill.classList.remove('drag-over');
-  });
+  };
 
-  pill.addEventListener('drop', (e) => {
+  const onDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
     pill.classList.remove('drag-over');
 
-    const files = e.dataTransfer.files;
+    const dt = e.dataTransfer;
+    if (!dt) return;
+
+    // A. Check for local OS files
+    const files = dt.files;
     if (files && files.length > 0) {
       const paths = [];
       for (let i = 0; i < files.length; i++) {
-        // In electron/webview environments, file.path exists
-        paths.push(files[i].path || files[i].name);
+        const p = files[i].path || files[i].name;
+        if (p) paths.push(p);
       }
-      handleDroppedPaths(paths);
+      if (paths.length > 0) {
+        handleDroppedPaths(paths);
+        return;
+      }
     }
+
+    // B. Check for HTML snippet (Chrome/Edge drags for images & rich links)
+    const html = dt.getData('text/html');
+    if (html) {
+      const imgMatch = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+      if (imgMatch && imgMatch[1]) {
+        let src = imgMatch[1].replace(/&amp;/g, '&');
+        emit('stage-files', { paths: [src], isUrl: true, isImage: true }).catch(console.error);
+        updateBadge(stagedCount + 1);
+        return;
+      }
+      const aMatch = html.match(/<a[^>]+href=["']([^"']+)["']/i);
+      if (aMatch && aMatch[1]) {
+        let href = aMatch[1].replace(/&amp;/g, '&');
+        emit('stage-files', { paths: [href], isUrl: true }).catch(console.error);
+        updateBadge(stagedCount + 1);
+        return;
+      }
+    }
+
+    // C. Check for URI-List (dragged URL links)
+    const uriList = dt.getData('text/uri-list');
+    if (uriList && uriList.trim()) {
+      const urls = uriList.split('\n').map(u => u.trim()).filter(u => u && !u.startsWith('#'));
+      if (urls.length > 0) {
+        emit('stage-files', { paths: urls, isUrl: true }).catch(console.error);
+        updateBadge(stagedCount + urls.length);
+        return;
+      }
+    }
+
+    // D. Check for plain text (dragged text selection or direct URL)
+    const plainText = dt.getData('text/plain');
+    if (plainText && plainText.trim()) {
+      const text = plainText.trim();
+      if (text.startsWith('http://') || text.startsWith('https://')) {
+        emit('stage-files', { paths: [text], isUrl: true }).catch(console.error);
+        updateBadge(stagedCount + 1);
+      } else {
+        emit('stage-text', { text }).catch(console.error);
+        updateBadge(stagedCount + 1);
+      }
+    }
+  };
+
+  // Attach drag listeners to both window and pill to ensure 100% capture across entire viewport
+  ['dragenter', 'dragover'].forEach((type) => {
+    window.addEventListener(type, onDragOver, false);
+    pill.addEventListener(type, onDragOver, false);
   });
+
+  ['dragleave', 'dragend'].forEach((type) => {
+    window.addEventListener(type, onDragLeave, false);
+    pill.addEventListener(type, onDragLeave, false);
+  });
+
+  window.addEventListener('drop', onDrop, false);
+  pill.addEventListener('drop', onDrop, false);
 });

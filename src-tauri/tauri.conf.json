@@ -12,18 +12,15 @@
       {
         "label": "dropbox",
         "title": "PotatoClaw DropBox",
-        "width": 64,
-        "height": 64,
-        "minWidth": 48,
-        "minHeight": 48,
-        "maxWidth": 180,
-        "maxHeight": 180,
-        "resizable": true,
+        "width": 72,
+        "height": 72,
+        "resizable": false,
         "decorations": false,
         "shadow": false,
         "alwaysOnTop": true,
         "transparent": true,
         "visible": true,
+        "skipTaskbar": true,
         "url": "dropbox.html"
       },
       {
@@ -33,7 +30,8 @@
         "height": 680,
         "resizable": true,
         "decorations": false,
-        "alwaysOnTop": true,
+        "shadow": false,
+        "alwaysOnTop": false,
         "transparent": true,
         "visible": false,
         "url": "hud.html"
@@ -47,6 +45,7 @@
         "alwaysOnTop": true,
         "transparent": true,
         "visible": false,
+        "skipTaskbar": true,
         "url": "snipper.html"
       }
     ],

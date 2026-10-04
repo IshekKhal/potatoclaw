@@ -72,11 +72,18 @@ pub const PROTECTED_PROCESS_NAMES: &[&str] = &[
     "msmpeng.exe",
     "slack.exe", "discord.exe", "telegram.exe", "whatsapp.exe", "zoom.exe", "teams.exe",
     "powershell.exe", "cmd.exe", "wt.exe", "bash.exe", "wsl.exe", "conhost.exe",
-    "potatoclaw.exe", "potatoclaw_lib.exe"
+    "potatoclaw.exe", "potatoclaw_lib.exe",
+    "msedgewebview2.exe", "webview2.exe", "webviewhost.exe"
 ];
 
 pub fn is_protected_process(name: &str) -> bool {
     let lower = name.to_lowercase();
+    if lower.contains("potatoclaw")
+        || lower.contains("msedgewebview2")
+        || lower.contains("webview2")
+    {
+        return true;
+    }
     PROTECTED_PROCESS_NAMES.iter().any(|&p| p == lower)
 }
 
@@ -171,16 +178,6 @@ pub fn trim_idle_background_processes(min_bytes_threshold: usize) -> TrimReport 
 }
 
 pub fn trim_current_process() {
-    unsafe {
-        let current_pid = std::process::id();
-        if let Ok(handle) = OpenProcess(
-            PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | PROCESS_SET_QUOTA,
-            false,
-            current_pid,
-        ) {
-            let _ = K32EmptyWorkingSet(handle);
-            let _ = CloseHandle(handle);
-        }
-    }
+    // Intentionally no-op to prevent paging out PotatoClaw and its WebView2 rendering pipeline
 }
 
