@@ -53,14 +53,14 @@ cargo run                                        # dev mode with live hotkeys
 cargo build --release                            # -> ~20 MB standalone: target/release/potatoclaw.exe
 ```
 
-Hotkeys: `Alt+P+P` (HUD toggle), `Alt+P+2` (snip), `Alt+P+1` (clipboard), `Alt+P+V` (voice). Left-click pill to toggle HUD; double-click pill to trigger instant safe memory trim.
+Hotkeys: `Alt+Shift+P` / `Alt+P+P` (HUD toggle), `Alt+Shift+2` / `Alt+P+2` (snip), `Alt+Shift+1` / `Alt+P+1` (clipboard with hover popover), `Alt+Shift+V` / `Alt+P+V` (voice). Left-click pill to toggle HUD; double-click pill to trigger instant safe memory trim. Drag files (PDF, DOCX, CSV, code) or browser elements onto the pill to stage context silently.
 
 ## Results
 
 ```
 Physical RAM Reclaimed:  1,719 MB (automated test) to 3,500+ MB (heavy multi-tab browsing)
 Trim Execution Latency:  0.24 seconds across scanned PIDs
-Client Footprint:        ~20 MB standalone binary, lightweight native runtime
+Client Footprint:        18.3 MB standalone binary, lightweight native runtime
 Total Monthly Cost:      ₹0.00 / $0.00 (verified on free tiers across all 6 services)
 ```
 
