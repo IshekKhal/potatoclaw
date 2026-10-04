@@ -7,6 +7,7 @@ pub mod screen_capture;
 pub mod tray;
 
 use commands::*;
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -14,6 +15,14 @@ pub fn run() {
         .plugin(hotkeys::build_shortcut_plugin())
         .setup(|app| {
             tray::setup_tray(app.handle())?;
+            if let Some(window) = app.get_webview_window("dropbox") {
+                let _ = window.set_shadow(false);
+                let _ = window.set_decorations(false);
+            }
+            if let Some(window) = app.get_webview_window("snipper") {
+                let _ = window.set_shadow(false);
+                let _ = window.set_decorations(false);
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

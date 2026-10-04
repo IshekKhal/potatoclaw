@@ -136,7 +136,7 @@ async def process_payload(
                 "answer": answer,
             }
 
-        # Branch C: Code and Text Reasoning (default fallback)
+        # Branch C: Universal Text Reasoning and Analysis (default fallback)
         effective_prompt = prompt.strip()
         if not effective_prompt:
             effective_prompt = "Hello PotatoClaw"
@@ -152,7 +152,7 @@ async def process_payload(
             )
             if memory_bullets:
                 prompt_for_gemma = (
-                    f"Relevant Past Lab Fixes:\n{memory_bullets}\n\n"
+                    f"Relevant Past Context:\n{memory_bullets}\n\n"
                     f"Current Task:\n{effective_prompt}"
                 )
 
@@ -163,11 +163,11 @@ async def process_payload(
             ingest_memory,
             effective_prompt,
             answer,
-            "code_solution",
+            "general_interaction",
         )
 
         return {
             "status": "success",
-            "type": "code_solution",
+            "type": "text_solution",
             "answer": answer,
         }

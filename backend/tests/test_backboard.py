@@ -32,6 +32,26 @@ async def test_backboard_assistant_and_memory_live():
 
 
 @pytest.mark.asyncio
+async def test_backboard_general_interaction_live():
+    """Verify storing and recalling general writing/research interactions."""
+    query = "Draft a formal abstract outline for a systems engineering report."
+    solution = "1. Problem definition 2. Architecture 3. Empirical results 4. Tradeoff analysis"
+
+    ingest_result = await ingest_memory(
+        query=query,
+        solution=solution,
+        context_type="general_interaction",
+        metadata={"domain": "research", "source": "pytest_live"},
+    )
+    assert ingest_result is not None
+    assert isinstance(ingest_result, str)
+    assert len(ingest_result) > 0
+
+    recalled = await recall_memories(query="engineering report abstract outline", limit=5)
+    assert isinstance(recalled, list)
+
+
+@pytest.mark.asyncio
 async def test_backboard_graceful_fallback(monkeypatch):
     """Verify that network or authentication errors degrade gracefully without raising."""
     monkeypatch.setattr(settings, "BACKBOARD_API_KEY", "invalid_dummy_key")

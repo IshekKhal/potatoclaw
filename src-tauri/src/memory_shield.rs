@@ -56,6 +56,30 @@ pub fn get_process_name(handle: HANDLE) -> String {
     "unknown".to_string()
 }
 
+pub const PROTECTED_PROCESS_NAMES: &[&str] = &[
+    "system", "registry", "smss.exe", "csrss.exe", "wininit.exe", "services.exe",
+    "lsass.exe", "svchost.exe", "fontdrvhost.exe", "winlogon.exe", "dwm.exe",
+    "sihost.exe", "taskhostw.exe", "explorer.exe", "shellexperiencehost.exe",
+    "startmenuexperiencehost.exe", "searchhost.exe", "searchindexer.exe",
+    "ctfmon.exe", "textinputhost.exe", "systemsettings.exe", "runtimebroker.exe",
+    "applicationframehost.exe",
+    "audiodg.exe", "rtkaudioservice64.exe", "nvxdsync.exe", "nvcontainer.exe",
+    "nvdisplay.container.exe", "radeonssoftware.exe", "amdfendrsr.exe",
+    "igfxem.exe", "intelcphdcp.exe", "intelcphdcsvc.exe",
+    "onedrive.exe", "dropbox.exe", "googledrivefs.exe", "powertoys.exe",
+    "powertoys.runner.exe", "autohotkey.exe", "everything.exe", "sharex.exe",
+    "ditto.exe", "flux.exe", "securityhealthservice.exe", "securityhealthsystray.exe",
+    "msmpeng.exe",
+    "slack.exe", "discord.exe", "telegram.exe", "whatsapp.exe", "zoom.exe", "teams.exe",
+    "powershell.exe", "cmd.exe", "wt.exe", "bash.exe", "wsl.exe", "conhost.exe",
+    "potatoclaw.exe", "potatoclaw_lib.exe"
+];
+
+pub fn is_protected_process(name: &str) -> bool {
+    let lower = name.to_lowercase();
+    PROTECTED_PROCESS_NAMES.iter().any(|&p| p == lower)
+}
+
 pub fn trim_idle_background_processes(min_bytes_threshold: usize) -> TrimReport {
     let foreground_pid = get_active_foreground_pid();
     let current_pid = std::process::id();
@@ -94,6 +118,12 @@ pub fn trim_idle_background_processes(min_bytes_threshold: usize) -> TrimReport 
                     Err(_) => continue,
                 };
 
+                let name = get_process_name(handle);
+                if is_protected_process(&name) {
+                    let _ = CloseHandle(handle);
+                    continue;
+                }
+
                 let mut pmc_before = PROCESS_MEMORY_COUNTERS::default();
                 pmc_before.cb = std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32;
 
@@ -101,7 +131,6 @@ pub fn trim_idle_background_processes(min_bytes_threshold: usize) -> TrimReport 
                     let ws_before = pmc_before.WorkingSetSize as u64;
 
                     if ws_before >= min_bytes_threshold as u64 {
-                        let name = get_process_name(handle);
                         let trim_ok = K32EmptyWorkingSet(handle);
 
                         if trim_ok.as_bool() {

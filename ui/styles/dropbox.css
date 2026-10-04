@@ -1,6 +1,12 @@
 /* Window 1: Persistent Floating DropBox Pill (60x60px) */
 
-body {
+html, body {
+  background: transparent !important;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -55,6 +61,22 @@ body {
 
 .dropbox-pill.drag-over::before {
   border-color: rgba(16, 185, 129, 0.6);
+}
+
+/* Trimming Pulse Animation */
+.dropbox-pill.trimming {
+  border-color: #38bdf8;
+  box-shadow: 0 0 18px rgba(56, 189, 248, 0.7);
+  animation: trim-pulse 0.8s ease-in-out;
+}
+
+@keyframes trim-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.12);
+  }
 }
 
 .dropbox-icon {

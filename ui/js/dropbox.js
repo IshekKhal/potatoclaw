@@ -51,13 +51,54 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Left click: Toggle HUD
-  pill.addEventListener('click', (e) => {
-    if (e.button !== 0 || isDraggingPill) return;
+  let clickTimer = null;
+  const CLICK_DELAY_MS = 220;
+
+  const triggerMemoryTrim = async () => {
+    pill.classList.add('trimming');
+    setTimeout(() => {
+      pill.classList.remove('trimming');
+    }, 800);
+
+    try {
+      const report = await invoke('trim_memory', { threshold_mb: 100 });
+      console.log('RAM Trimmed from DropBox pill:', report);
+      emit('memory-trimmed', report).catch(console.error);
+    } catch (err) {
+      console.error('Failed to trim RAM from pill:', err);
+    }
+  };
+
+  const triggerHudToggle = () => {
     closeContextMenu();
     invoke('toggle_window', { label: 'hud' }).catch(err => {
       console.error('Failed to toggle HUD:', err);
     });
+  };
+
+  // Left click & double click disambiguation
+  pill.addEventListener('click', (e) => {
+    if (e.button !== 0 || isDraggingPill) return;
+
+    if (clickTimer) {
+      clearTimeout(clickTimer);
+      clickTimer = null;
+      triggerMemoryTrim();
+    } else {
+      clickTimer = setTimeout(() => {
+        clickTimer = null;
+        triggerHudToggle();
+      }, CLICK_DELAY_MS);
+    }
+  });
+
+  pill.addEventListener('dblclick', (e) => {
+    if (e.button !== 0) return;
+    if (clickTimer) {
+      clearTimeout(clickTimer);
+      clickTimer = null;
+    }
+    triggerMemoryTrim();
   });
 
   // Right-click: Context Menu
@@ -90,13 +131,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   menuTrimRam.addEventListener('click', async () => {
     closeContextMenu();
-    try {
-      const report = await invoke('trim_memory', { threshold_mb: 100 });
-      console.log('RAM Trimmed from DropBox pill:', report);
-      emit('memory-trimmed', report).catch(console.error);
-    } catch (err) {
-      console.error('Failed to trim RAM:', err);
-    }
+    await triggerMemoryTrim();
   });
 
   menuHidePill.addEventListener('click', () => {

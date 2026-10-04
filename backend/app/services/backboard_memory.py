@@ -28,7 +28,7 @@ async def get_or_create_assistant(client: BackboardClient) -> Optional[str]:
         new_assistant = await client.create_assistant(
             name="PotatoClaw-Assistant",
             system_prompt=(
-                "PotatoClaw persistent memory assistant for Rudra's C and Python lab sessions"
+                "PotatoClaw persistent desktop companion with cross-session memory for general productivity, writing, research, analysis, and programming."
             ),
         )
         _cached_assistant_id = str(
@@ -99,10 +99,10 @@ async def recall_memories(query: str, limit: int = 5) -> List[Dict[str, Any]]:
 async def ingest_memory(
     query: str,
     solution: str,
-    context_type: str = "code_fix",
+    context_type: str = "general_interaction",
     metadata: Optional[Dict[str, Any]] = None,
 ) -> Optional[str]:
-    """Store problem-solution pair into persistent memory.
+    """Store user-assistant interaction pair into persistent memory.
 
     Gracefully degrades to None on any network, authentication, or upstream failure.
     """
@@ -110,7 +110,7 @@ async def ingest_memory(
         if not settings.BACKBOARD_API_KEY:
             return None
 
-        formatted_content = f"Problem: {query.strip()}\nSolution: {solution.strip()}"
+        formatted_content = f"User: {query.strip()}\nAssistant: {solution.strip()}"
         meta = {"category": context_type, **(metadata or {})}
 
         try:

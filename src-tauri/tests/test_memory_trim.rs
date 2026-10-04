@@ -1,4 +1,49 @@
-use potatoclaw_lib::memory_shield::{get_active_foreground_pid, trim_idle_background_processes};
+use potatoclaw_lib::memory_shield::{
+    get_active_foreground_pid, is_protected_process, trim_idle_background_processes,
+    PROTECTED_PROCESS_NAMES,
+};
+
+#[test]
+fn test_protected_whitelist_logic() {
+    // Whitelist unit test: verify critical process names are protected
+    assert!(is_protected_process("explorer.exe"));
+    assert!(is_protected_process("dwm.exe"));
+    assert!(is_protected_process("Discord.exe"));
+    assert!(is_protected_process("slack.exe"));
+    assert!(is_protected_process("OneDrive.exe"));
+    assert!(is_protected_process("potatoclaw.exe"));
+
+    // Case-insensitivity verification
+    assert!(is_protected_process("EXPLORER.EXE"));
+    assert!(is_protected_process("DWM.exe"));
+    assert!(is_protected_process("discord.exe"));
+    assert!(is_protected_process("ONEDRIVE.EXE"));
+
+    // Non-whitelisted processes must return false
+    assert!(!is_protected_process("chrome.exe"));
+    assert!(!is_protected_process("msedge.exe"));
+    assert!(!is_protected_process("unknown_miner.exe"));
+    assert!(!is_protected_process("test_app.exe"));
+}
+
+#[test]
+fn test_whitelist_processes_never_trimmed() {
+    // Whitelist integration test: run trim with low threshold
+    let report = trim_idle_background_processes(50 * 1024 * 1024);
+    for detail in &report.details {
+        assert!(
+            !is_protected_process(&detail.process_name),
+            "Trimmed process '{}' must not be protected",
+            detail.process_name
+        );
+        let lower = detail.process_name.to_lowercase();
+        assert!(
+            !PROTECTED_PROCESS_NAMES.contains(&lower.as_str()),
+            "Process '{}' is in PROTECTED_PROCESS_NAMES and must never be trimmed",
+            detail.process_name
+        );
+    }
+}
 
 #[test]
 fn test_foreground_pid_protected() {

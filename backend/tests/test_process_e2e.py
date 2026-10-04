@@ -14,7 +14,23 @@ def test_process_text_branch_e2e(client: TestClient):
 
     data = response.json()
     assert data["status"] == "success"
-    assert data["type"] == "code_solution"
+    assert data["type"] in ("text_solution", "code_solution")
+    assert isinstance(data["answer"], str)
+    assert len(data["answer"]) > 0
+
+
+def test_process_general_writing_e2e(client: TestClient):
+    """Verify general writing and reasoning without code blocks via POST /api/v1/process."""
+    payload = {
+        "prompt": "Summarize the key principles of memory management in two bullet points.",
+        "data_type": "text",
+    }
+    response = client.post("/api/v1/process", data=payload)
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["type"] in ("text_solution", "code_solution")
     assert isinstance(data["answer"], str)
     assert len(data["answer"]) > 0
 

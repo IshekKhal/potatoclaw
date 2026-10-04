@@ -20,20 +20,23 @@ def get_genai_client() -> genai.Client:
     return genai.Client(api_key=settings.GEMINI_API_KEY)
 
 
-def generate_text_reasoning(prompt: str, code_context: str = "") -> str:
-    """Generate concise technical solutions using Gemma 4."""
+def generate_text_reasoning(prompt: str, context: str = "", code_context: str = "") -> str:
+    """Generate direct, clear solutions across general and technical tasks using Gemma 4."""
     client = get_genai_client()
 
     full_prompt = (
-        "You are PotatoClaw, an anti-thrash AI engineering companion for students. "
-        "Provide a concise, direct, and working technical solution. "
-        "Avoid fluff, buzzwords, or unnecessary explanations.\n\n"
+        "You are PotatoClaw, a fast, lightweight AI desktop companion for memory-constrained laptops. "
+        "Provide direct, clear, and helpful answers across any task, including writing, research, analysis, conversation, and programming. "
+        "Only use markdown code blocks when the user asks for code or the problem genuinely requires code. "
+        "Avoid fluff, filler, and generic buzzwords.\n\n"
     )
-    if code_context:
+    if context:
+        full_prompt += f"Context:\n{context}\n\n"
+    elif code_context:
         full_prompt += f"Context:\n```\n{code_context}\n```\n\n"
     full_prompt += f"Task / Question:\n{prompt}"
 
-    with trace_span(op="llm.gemma_text", name="Gemma 4 Code & Text Reasoning"):
+    with trace_span(op="llm.gemma_text", name="Gemma 4 Universal Reasoning"):
         try:
             response = client.models.generate_content(
                 model=settings.GEMMA_MODEL_ID,
@@ -48,14 +51,14 @@ def generate_text_reasoning(prompt: str, code_context: str = "") -> str:
 
 
 def generate_multimodal_vision(image_bytes: bytes, mime_type: str, prompt: str) -> str:
-    """Analyze screenshots and code images using Gemma 4 multimodal capabilities."""
+    """Analyze images, screenshots, and visual interfaces using Gemma 4 multimodal capabilities."""
     client = get_genai_client()
 
-    effective_prompt = prompt.strip() if prompt else "Analyze this screenshot. Pinpoint any errors, logs, or UI issues."
+    effective_prompt = prompt.strip() if prompt else "Analyze this image and identify key elements or issues."
     instruction = (
-        "You are PotatoClaw, inspecting a student's screen snip. "
-        "Pinpoint exact syntax errors, runtime stack traces, compiler output, or UI glitches visible in the image. "
-        "Give the exact fix directly and concisely.\n\n"
+        "You are PotatoClaw, inspecting an image or screen capture. "
+        "Analyze the content, visual elements, diagrams, data, text, or interface visible in the image, "
+        "and answer the user's request directly and clearly.\n\n"
         f"User Query: {effective_prompt}"
     )
 
@@ -83,12 +86,12 @@ def two_pass_tabular_synthesis(df_head: str, anomaly_metrics: Dict[str, Any], us
         try:
             # Pass 2A: Synthesis
             pass_2a_prompt = (
-                "You are PotatoClaw's tabular engineering specialist. "
+                "You are PotatoClaw's tabular data specialist. "
                 "Review the following dataset preview and Prior Labs TabPFN statistical anomaly metrics.\n\n"
                 f"Dataset Sample (First Rows):\n{df_head}\n\n"
                 f"TabPFN Anomaly & Distribution Metrics:\n{metrics_str}\n\n"
-                f"User Inquiry: {user_prompt or 'Explain what these anomalies indicate and propose engineering fixes.'}\n\n"
-                "Synthesize an engineering diagnostic explaining what the detected anomalies represent in this data."
+                f"User Inquiry: {user_prompt or 'Explain what these anomalies indicate and propose practical solutions.'}\n\n"
+                "Synthesize a diagnostic report explaining what the detected anomalies represent in this data."
             )
 
             res_2a = client.models.generate_content(

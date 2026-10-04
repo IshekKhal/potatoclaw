@@ -15,6 +15,34 @@ fn resolve_base_url(backend_url: Option<String>) -> String {
         .to_string()
 }
 
+/// Resolve access code from environment variable or .env files.
+fn resolve_access_code() -> Option<String> {
+    if let Ok(val) = std::env::var("ACCESS_CODE") {
+        let trimmed = val.trim().to_string();
+        if !trimmed.is_empty() {
+            return Some(trimmed);
+        }
+    }
+    for candidate in &["../.env", ".env", "../../.env"] {
+        if let Ok(content) = std::fs::read_to_string(candidate) {
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with("ACCESS_CODE=") {
+                    let code = trimmed
+                        .trim_start_matches("ACCESS_CODE=")
+                        .trim()
+                        .trim_matches('"')
+                        .trim_matches('\'');
+                    if !code.is_empty() {
+                        return Some(code.to_string());
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 /// Detect MIME type based on file extension.
 fn detect_mime_type(filename: &str) -> &'static str {
     let lower = filename.to_lowercase();
@@ -72,9 +100,12 @@ pub async fn dispatch_process(
         form = form.part("file", part);
     }
 
-    let response = client
-        .post(&url)
-        .multipart(form)
+    let mut req = client.post(&url).multipart(form);
+    if let Some(code) = resolve_access_code() {
+        req = req.header("X-Access-Code", code);
+    }
+
+    let response = req
         .send()
         .await
         .map_err(|e| format!("Network request to {} failed: {}", url, e))?;
@@ -123,9 +154,12 @@ pub async fn dispatch_transcribe(
 
     let form = Form::new().part("audio", part);
 
-    let response = client
-        .post(&url)
-        .multipart(form)
+    let mut req = client.post(&url).multipart(form);
+    if let Some(code) = resolve_access_code() {
+        req = req.header("X-Access-Code", code);
+    }
+
+    let response = req
         .send()
         .await
         .map_err(|e| format!("Network request to {} failed: {}", url, e))?;
@@ -162,9 +196,12 @@ pub async fn dispatch_speak(
 
     let form = Form::new().text("text", text);
 
-    let response = client
-        .post(&url)
-        .multipart(form)
+    let mut req = client.post(&url).multipart(form);
+    if let Some(code) = resolve_access_code() {
+        req = req.header("X-Access-Code", code);
+    }
+
+    let response = req
         .send()
         .await
         .map_err(|e| format!("Network request to {} failed: {}", url, e))?;
