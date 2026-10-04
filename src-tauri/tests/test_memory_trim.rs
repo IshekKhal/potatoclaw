@@ -72,12 +72,22 @@ fn test_system_pids_excluded() {
 
 #[test]
 fn test_memory_trim_execution() {
-    // Execute on live Windows processes with 200 MB threshold
-    let report = trim_idle_background_processes(200 * 1024 * 1024);
+    // Execute on live Windows processes with 100 MB threshold (PotatoClaw production default)
+    let report = trim_idle_background_processes(100 * 1024 * 1024);
     println!(
         "Scanned {} processes | Trimmed: {} | Total Reclaimed: {:.2} MB",
         report.processes_scanned, report.processes_trimmed, report.total_mb_reclaimed
     );
+    for d in &report.details {
+        println!(
+            "TRIM_RECORD: {} | PID {} | Before: {:.2} MB | After: {:.2} MB | Reclaimed: {:.2} MB",
+            d.process_name,
+            d.pid,
+            d.ws_before_bytes as f64 / (1024.0 * 1024.0),
+            d.ws_after_bytes as f64 / (1024.0 * 1024.0),
+            d.reclaimed_bytes as f64 / (1024.0 * 1024.0)
+        );
+    }
 
     assert!(
         report.processes_scanned > 0,
