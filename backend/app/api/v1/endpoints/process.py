@@ -223,8 +223,9 @@ async def process_payload(
         if not effective_prompt and not attached_doc_header:
             effective_prompt = "Hello PotatoClaw"
 
-        # Contextual memory recall via Backboard
-        recall_query = effective_prompt if effective_prompt else (file.filename if file else "Attached document analysis")
+        # Contextual memory recall via Backboard (query with user question, not raw document dump)
+        user_query = prompt.split("[Attached Document:")[0].strip() if "[Attached Document:" in prompt else prompt.strip()
+        recall_query = user_query or (file.filename if file else "General productivity task")
         recalled = await recall_memories(recall_query)
         memory_bullets = ""
         if recalled:

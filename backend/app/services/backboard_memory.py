@@ -7,6 +7,7 @@ from backboard import BackboardClient
 from app.core.config import settings
 from app.services.sentry_tracing import trace_span
 
+BACKBOARD_TIMEOUT = 15
 _cached_assistant_id: Optional[str] = None
 
 
@@ -36,7 +37,10 @@ async def get_or_create_assistant(client: BackboardClient) -> Optional[str]:
         )
         return _cached_assistant_id
     except Exception as exc:
-        sentry_sdk.capture_exception(exc)
+        sentry_sdk.capture_message(
+            f"Backboard get_or_create_assistant degraded: {exc}",
+            level="warning",
+        )
         return None
 
 
@@ -50,13 +54,16 @@ async def recall_memories(query: str, limit: int = 5) -> List[Dict[str, Any]]:
             return []
 
         try:
-            async with BackboardClient(api_key=settings.BACKBOARD_API_KEY) as client:
+            async with BackboardClient(
+                api_key=settings.BACKBOARD_API_KEY,
+                timeout=BACKBOARD_TIMEOUT,
+            ) as client:
                 assistant_id = await get_or_create_assistant(client)
                 if not assistant_id:
                     return []
 
-                # Attempt semantic search if query is non-empty
-                effective_query = (query or "").strip()
+                # Cap semantic search query to 500 characters
+                effective_query = (query or "").strip()[:500]
                 if effective_query:
                     try:
                         search_res = await client.search_memories(
@@ -92,7 +99,10 @@ async def recall_memories(query: str, limit: int = 5) -> List[Dict[str, Any]]:
                     for m in res.memories
                 ]
         except Exception as exc:
-            sentry_sdk.capture_exception(exc)
+            sentry_sdk.capture_message(
+                f"Backboard memory recall degraded: {exc}",
+                level="warning",
+            )
             return []
 
 
@@ -110,11 +120,23 @@ async def ingest_memory(
         if not settings.BACKBOARD_API_KEY:
             return None
 
-        formatted_content = f"User: {query.strip()}\nAssistant: {solution.strip()}"
+        # Clean and cap stored interaction to avoid exceeding Backboard embedding limits
+        raw_query = (query or "").strip()
+        if "[Attached Document:" in raw_query:
+            parts = raw_query.split("[Attached Document:")
+            clean_query = parts[0].strip() or raw_query[:1500]
+        else:
+            clean_query = raw_query[:1500]
+
+        clean_solution = (solution or "").strip()[:2000]
+        formatted_content = f"User: {clean_query}\nAssistant: {clean_solution}"
         meta = {"category": context_type, **(metadata or {})}
 
         try:
-            async with BackboardClient(api_key=settings.BACKBOARD_API_KEY) as client:
+            async with BackboardClient(
+                api_key=settings.BACKBOARD_API_KEY,
+                timeout=BACKBOARD_TIMEOUT,
+            ) as client:
                 assistant_id = await get_or_create_assistant(client)
                 if not assistant_id:
                     return None
@@ -128,5 +150,9 @@ async def ingest_memory(
                     return str(res.get("memory_id") or res.get("id") or "success")
                 return str(getattr(res, "id", "success"))
         except Exception as exc:
-            sentry_sdk.capture_exception(exc)
+            sentry_sdk.capture_message(
+                f"Backboard memory ingestion degraded: {exc}",
+                level="warning",
+            )
             return None
+

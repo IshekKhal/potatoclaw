@@ -36,3 +36,7 @@ htmlcov/
 
 # Rust Build Targets
 **/target/
+
+# System & IDE logs
+*.log
+hs_err_pid*
