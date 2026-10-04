@@ -1,13 +1,14 @@
 """Speech-to-text transcription endpoint."""
 
 from typing import Any, Dict
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from app.core.auth import verify_access_code
 from app.services.groq_transcribe import transcribe_audio
 
 router = APIRouter()
 
 
-@router.post("/transcribe")
+@router.post("/transcribe", dependencies=[Depends(verify_access_code)])
 async def transcribe_endpoint(audio: UploadFile = File(...)) -> Dict[str, Any]:
     """Transcribe audio upload using Groq Whisper Large V3 Turbo."""
     if not audio:

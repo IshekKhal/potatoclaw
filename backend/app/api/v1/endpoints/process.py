@@ -2,9 +2,11 @@
 
 import io
 from typing import Any, Dict, Optional
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 import pandas as pd
 
+from app.core.auth import verify_access_code
+from app.services.backboard_memory import ingest_memory, recall_memories
 from app.services.gemma_brain import (
     generate_multimodal_vision,
     generate_text_reasoning,
@@ -23,8 +25,9 @@ ALLOWED_IMAGE_TYPES = {
 }
 
 
-@router.post("/process")
+@router.post("/process", dependencies=[Depends(verify_access_code)])
 async def process_payload(
+    background_tasks: BackgroundTasks,
     prompt: str = Form(""),
     data_type: str = Form("text"),
     file: Optional[UploadFile] = File(None),
@@ -66,6 +69,14 @@ async def process_payload(
                 df_head=df_head,
                 anomaly_metrics=metrics,
                 user_prompt=prompt,
+            )
+
+            # Ingest tabular diagnosis into persistent memory asynchronously
+            background_tasks.add_task(
+                ingest_memory,
+                prompt or "Tabular Anomaly Analysis",
+                answer,
+                "tabular_solution",
             )
 
             return {
@@ -111,6 +122,14 @@ async def process_payload(
                 prompt=prompt,
             )
 
+            # Ingest vision diagnosis into persistent memory asynchronously
+            background_tasks.add_task(
+                ingest_memory,
+                prompt or "Visual Error Diagnosis",
+                answer,
+                "vision_solution",
+            )
+
             return {
                 "status": "success",
                 "type": "vision_solution",
@@ -122,7 +141,31 @@ async def process_payload(
         if not effective_prompt:
             effective_prompt = "Hello PotatoClaw"
 
-        answer = generate_text_reasoning(prompt=effective_prompt)
+        # Contextual memory recall via Backboard
+        recalled = await recall_memories(effective_prompt)
+        prompt_for_gemma = effective_prompt
+        if recalled:
+            memory_bullets = "\n".join(
+                f"- {m.get('content', '').strip()}"
+                for m in recalled
+                if m.get("content")
+            )
+            if memory_bullets:
+                prompt_for_gemma = (
+                    f"Relevant Past Lab Fixes:\n{memory_bullets}\n\n"
+                    f"Current Task:\n{effective_prompt}"
+                )
+
+        answer = generate_text_reasoning(prompt=prompt_for_gemma)
+
+        # Non-blocking memory ingestion in background
+        background_tasks.add_task(
+            ingest_memory,
+            effective_prompt,
+            answer,
+            "code_solution",
+        )
+
         return {
             "status": "success",
             "type": "code_solution",

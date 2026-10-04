@@ -1,12 +1,13 @@
 """Speech synthesis endpoint."""
 
-from fastapi import APIRouter, Form, HTTPException, Response
+from fastapi import APIRouter, Depends, Form, HTTPException, Response
+from app.core.auth import verify_access_code
 from app.services.elevenlabs_voice import synthesize_voice
 
 router = APIRouter()
 
 
-@router.post("/speak")
+@router.post("/speak", dependencies=[Depends(verify_access_code)])
 def speak_endpoint(text: str = Form(...)) -> Response:
     """Synthesize text into speech audio binary."""
     if not text or not text.strip():

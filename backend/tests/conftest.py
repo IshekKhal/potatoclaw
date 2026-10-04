@@ -10,13 +10,15 @@ from PIL import Image, ImageDraw
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.config import settings
 from app.main import app
 
 
 @pytest.fixture(scope="session")
 def client() -> Generator[TestClient, None, None]:
-    """Provide a TestClient instance for API verification."""
-    with TestClient(app) as test_client:
+    """Provide a TestClient instance for API verification with default X-Access-Code."""
+    headers = {"X-Access-Code": settings.ACCESS_CODE} if settings.ACCESS_CODE else {}
+    with TestClient(app, headers=headers) as test_client:
         yield test_client
 
 
