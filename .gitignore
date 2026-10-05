@@ -1,6 +1,6 @@
 # Documentation & Sensitive files
-/docs
 /docs/*
+!/docs/DEV_SUBMISSION.md
 MASTER_BUILD_LOG.md
 progress.md
 memory.md

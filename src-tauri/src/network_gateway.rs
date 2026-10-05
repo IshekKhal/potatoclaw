@@ -105,6 +105,99 @@ fn detect_mime_type(filename: &str) -> &'static str {
     }
 }
 
+/// Helper to scan a directory recursively and compile a clean structural tree and text file contents.
+fn scan_directory_to_text(dir: &Path, max_files: usize, max_file_bytes: usize) -> String {
+    let mut tree_lines = Vec::new();
+    let mut file_contents = Vec::new();
+    let mut count = 0;
+
+    fn should_skip_dir(name: &str) -> bool {
+        matches!(
+            name,
+            ".git" | "node_modules" | "__pycache__" | ".venv" | "venv" | "target" | "dist" | "build" | ".idea" | ".vscode" | ".pytest_cache"
+        )
+    }
+
+    fn should_skip_file(name: &str) -> bool {
+        let lower = name.to_lowercase();
+        lower.ends_with(".exe")
+            || lower.ends_with(".dll")
+            || lower.ends_with(".so")
+            || lower.ends_with(".dylib")
+            || lower.ends_with(".o")
+            || lower.ends_with(".a")
+            || lower.ends_with(".lib")
+            || lower.ends_with(".bin")
+            || lower.ends_with(".pyc")
+            || lower.ends_with(".zip")
+            || lower.ends_with(".tar")
+            || lower.ends_with(".gz")
+    }
+
+    fn walk(
+        current: &Path,
+        root: &Path,
+        count: &mut usize,
+        max_files: usize,
+        max_file_bytes: usize,
+        tree_lines: &mut Vec<String>,
+        file_contents: &mut Vec<(String, String)>,
+    ) {
+        if *count >= max_files {
+            return;
+        }
+        if let Ok(entries) = std::fs::read_dir(current) {
+            let mut sorted: Vec<_> = entries.filter_map(|e| e.ok()).collect();
+            sorted.sort_by_key(|e| e.path());
+
+            for entry in sorted {
+                let path = entry.path();
+                let file_name = entry.file_name().to_string_lossy().to_string();
+                let rel_path = path.strip_prefix(root).unwrap_or(&path).to_string_lossy().to_string();
+
+                if path.is_dir() {
+                    if should_skip_dir(&file_name) {
+                        continue;
+                    }
+                    tree_lines.push(format!("📁 {}/", rel_path));
+                    walk(&path, root, count, max_files, max_file_bytes, tree_lines, file_contents);
+                } else if path.is_file() {
+                    if should_skip_file(&file_name) {
+                        continue;
+                    }
+                    tree_lines.push(format!("📄 {}", rel_path));
+                    if *count < max_files {
+                        *count += 1;
+                        if let Ok(bytes) = std::fs::read(&path) {
+                            if bytes.len() <= max_file_bytes {
+                                let text = String::from_utf8_lossy(&bytes).to_string();
+                                file_contents.push((rel_path, text));
+                            } else {
+                                let text = String::from_utf8_lossy(&bytes[..max_file_bytes]).to_string();
+                                file_contents.push((rel_path, format!("{}...\n[Truncated at {} bytes]", text, max_file_bytes)));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let root_name = dir.file_name().and_then(|n| n.to_str()).unwrap_or("folder");
+    walk(dir, dir, &mut count, max_files, max_file_bytes, &mut tree_lines, &mut file_contents);
+
+    let mut out = format!(
+        "[Attached Directory: {} ({} files scanned)]\nDirectory Tree:\n{}\n\n",
+        root_name,
+        count,
+        tree_lines.join("\n")
+    );
+    for (rel, content) in file_contents {
+        out.push_str(&format!("--- File: {} ---\n{}\n\n", rel, content));
+    }
+    out
+}
+
 pub async fn dispatch_process(
     mut prompt: String,
     data_type: String,
@@ -117,7 +210,7 @@ pub async fn dispatch_process(
     let url = format!("{}/api/v1/process", base);
     let client = reqwest::Client::new();
 
-    // If multiple documents/files are attached, read each and include in prompt
+    // If multiple documents/files/folders are attached, read each and include in prompt
     let all_paths = if let Some(ref list) = file_paths {
         if !list.is_empty() {
             list.clone()
@@ -132,28 +225,59 @@ pub async fn dispatch_process(
         vec![]
     };
 
-    if data_type == "text" && !all_paths.is_empty() {
-        let mut attached_text = String::new();
-        for p in &all_paths {
-            let path = Path::new(p);
-            if path.exists() {
-                if let Ok(content) = std::fs::read_to_string(path) {
-                    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("document");
-                    attached_text.push_str(&format!("[Attached Document: {}]:\n{}\n\n", name, content));
+    let mut attached_text = String::new();
+    let mut primary_binary_file: Option<(Vec<u8>, String, &'static str)> = None;
+
+    for p in &all_paths {
+        let clean_p = p.trim().trim_start_matches("file:///");
+        let path = Path::new(clean_p);
+        if path.exists() {
+            if path.is_dir() {
+                let dir_summary = scan_directory_to_text(path, 50, 100 * 1024);
+                attached_text.push_str(&dir_summary);
+            } else if path.is_file() {
+                let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("document").to_string();
+                let lower = name.to_lowercase();
+                let is_binary_doc = lower.ends_with(".pdf")
+                    || lower.ends_with(".docx")
+                    || lower.ends_with(".png")
+                    || lower.ends_with(".jpg")
+                    || lower.ends_with(".jpeg")
+                    || lower.ends_with(".webp")
+                    || lower.ends_with(".bmp")
+                    || lower.ends_with(".csv")
+                    || lower.ends_with(".tsv")
+                    || lower.ends_with(".zip");
+
+                if let Ok(bytes) = std::fs::read(path) {
+                    if is_binary_doc && primary_binary_file.is_none() {
+                        let mime = detect_mime_type(&name);
+                        primary_binary_file = Some((bytes, name, mime));
+                    } else {
+                        let text = String::from_utf8_lossy(&bytes).to_string();
+                        attached_text.push_str(&format!("[Attached Document: {}]:\n{}\n\n", name, text));
+                    }
                 }
             }
         }
-        if !attached_text.is_empty() {
-            prompt = format!("{}\n\n{}", attached_text, prompt);
-        }
+    }
+
+    if !attached_text.is_empty() {
+        prompt = format!("{}\n\n{}", attached_text, prompt);
     }
 
     let mut form = Form::new()
         .text("prompt", prompt)
         .text("data_type", data_type.clone());
 
-    if let Some(ref path_str) = file_path {
-        let (file_bytes, filename, mime) = if path_str.starts_with("http://") || path_str.starts_with("https://") {
+    if let Some((bytes, name, mime)) = primary_binary_file {
+        let part = Part::bytes(bytes)
+            .file_name(name)
+            .mime_str(mime)
+            .map_err(|e| format!("Invalid MIME format: {}", e))?;
+        form = form.part("file", part);
+    } else if let Some(ref path_str) = file_path {
+        if path_str.starts_with("http://") || path_str.starts_with("https://") {
             let res = client
                 .get(path_str)
                 .send()
@@ -178,32 +302,30 @@ pub async fn dispatch_process(
                 .to_vec();
 
             let detected_mime = detect_mime_type(&name);
-            (bytes, name, detected_mime)
+            let part = Part::bytes(bytes)
+                .file_name(name)
+                .mime_str(detected_mime)
+                .map_err(|e| format!("Invalid MIME format: {}", e))?;
+            form = form.part("file", part);
         } else {
-            let path = Path::new(path_str);
-            if !path.exists() {
-                return Err(format!("Attached file does not exist at '{}'", path_str));
+            let clean = path_str.trim().trim_start_matches("file:///");
+            let path = Path::new(clean);
+            if path.exists() && path.is_file() {
+                if let Ok(bytes) = std::fs::read(path) {
+                    let name = path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("upload.bin")
+                        .to_string();
+                    let detected_mime = detect_mime_type(&name);
+                    let part = Part::bytes(bytes)
+                        .file_name(name)
+                        .mime_str(detected_mime)
+                        .map_err(|e| format!("Invalid MIME format: {}", e))?;
+                    form = form.part("file", part);
+                }
             }
-
-            let bytes = std::fs::read(path)
-                .map_err(|e| format!("Failed to read file '{}': {}", path_str, e))?;
-
-            let name = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("upload.bin")
-                .to_string();
-
-            let detected_mime = detect_mime_type(&name);
-            (bytes, name, detected_mime)
-        };
-
-        let part = Part::bytes(file_bytes)
-            .file_name(filename)
-            .mime_str(mime)
-            .map_err(|e| format!("Invalid MIME format: {}", e))?;
-
-        form = form.part("file", part);
+        }
     }
 
     let mut req = client.post(&url).multipart(form);

@@ -203,6 +203,88 @@ document.addEventListener('DOMContentLoaded', () => {
     pill.classList.remove('drag-over');
   };
 
+  // Universal Drag-and-Drop Payload Extractor for Windows Explorer, VS Code, and Web Browsers
+  const extractDropPayload = (dt) => {
+    // 1. Native OS files with absolute path (e.g. from Windows Explorer)
+    if (dt.files && dt.files.length > 0) {
+      const validPaths = [];
+      for (let i = 0; i < dt.files.length; i++) {
+        const f = dt.files[i];
+        if (f.path && (f.path.includes(':\\') || f.path.startsWith('/') || f.path.startsWith('\\\\'))) {
+          validPaths.push(f.path);
+        }
+      }
+      if (validPaths.length > 0) {
+        return { type: 'paths', paths: validPaths };
+      }
+    }
+
+    // 2. URI-List (dragged from VS Code tabs or browser URLs)
+    const uriList = dt.getData('text/uri-list');
+    if (uriList && uriList.trim()) {
+      const lines = uriList.split(/[\r\n]+/).map(s => s.trim()).filter(s => s && !s.startsWith('#'));
+      const localPaths = [];
+      const webUrls = [];
+      for (const u of lines) {
+        if (u.startsWith('file:///')) {
+          let clean = decodeURIComponent(u.replace(/^file:\/\/\//, '')).replace(/\//g, '\\');
+          localPaths.push(clean);
+        } else if (u.startsWith('http://') || u.startsWith('https://')) {
+          webUrls.push(u);
+        }
+      }
+      if (localPaths.length > 0) {
+        return { type: 'paths', paths: localPaths };
+      }
+      if (webUrls.length > 0) {
+        return { type: 'urls', urls: webUrls };
+      }
+    }
+
+    // 3. HTML snippet (dragged web images or rich links from Chrome / Edge)
+    const html = dt.getData('text/html');
+    if (html) {
+      const imgMatch = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+      if (imgMatch && imgMatch[1]) {
+        let src = imgMatch[1].replace(/&amp;/g, '&');
+        if (src.startsWith('file:///')) {
+          let clean = decodeURIComponent(src.replace(/^file:\/\/\//, '')).replace(/\//g, '\\');
+          return { type: 'paths', paths: [clean] };
+        }
+        return { type: 'image_url', url: src };
+      }
+      const aMatch = html.match(/<a[^>]+href=["']([^"']+)["']/i);
+      if (aMatch && aMatch[1]) {
+        let href = aMatch[1].replace(/&amp;/g, '&');
+        if (href.startsWith('file:///')) {
+          let clean = decodeURIComponent(href.replace(/^file:\/\/\//, '')).replace(/\//g, '\\');
+          return { type: 'paths', paths: [clean] };
+        }
+        return { type: 'urls', urls: [href] };
+      }
+    }
+
+    // 4. Plain text (dragged code selection, VS Code tab text, or Windows path string)
+    const plainText = dt.getData('text/plain');
+    if (plainText && plainText.trim()) {
+      const trimmed = plainText.trim();
+      if (trimmed.startsWith('file:///')) {
+        let clean = decodeURIComponent(trimmed.replace(/^file:\/\/\//, '')).replace(/\//g, '\\');
+        return { type: 'paths', paths: [clean] };
+      }
+      const unquoted = trimmed.replace(/^["']|["']$/g, '');
+      if (/^[a-zA-Z]:\\/.test(unquoted) || unquoted.startsWith('\\\\')) {
+        return { type: 'paths', paths: [unquoted] };
+      }
+      if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+        return { type: 'urls', urls: [trimmed] };
+      }
+      return { type: 'text', text: trimmed };
+    }
+
+    return null;
+  };
+
   const onDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -211,61 +293,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const dt = e.dataTransfer;
     if (!dt) return;
 
-    // A. Check for local OS files
-    const files = dt.files;
-    if (files && files.length > 0) {
-      const paths = [];
-      for (let i = 0; i < files.length; i++) {
-        const p = files[i].path || files[i].name;
-        if (p) paths.push(p);
-      }
-      if (paths.length > 0) {
-        handleDroppedPaths(paths);
-        return;
-      }
-    }
+    const payload = extractDropPayload(dt);
+    if (!payload) return;
 
-    // B. Check for HTML snippet (Chrome/Edge drags for images & rich links)
-    const html = dt.getData('text/html');
-    if (html) {
-      const imgMatch = html.match(/<img[^>]+src=["']([^"']+)["']/i);
-      if (imgMatch && imgMatch[1]) {
-        let src = imgMatch[1].replace(/&amp;/g, '&');
-        emit('stage-files', { paths: [src], isUrl: true, isImage: true }).catch(console.error);
-        updateBadge(stagedCount + 1);
-        return;
-      }
-      const aMatch = html.match(/<a[^>]+href=["']([^"']+)["']/i);
-      if (aMatch && aMatch[1]) {
-        let href = aMatch[1].replace(/&amp;/g, '&');
-        emit('stage-files', { paths: [href], isUrl: true }).catch(console.error);
-        updateBadge(stagedCount + 1);
-        return;
-      }
-    }
-
-    // C. Check for URI-List (dragged URL links)
-    const uriList = dt.getData('text/uri-list');
-    if (uriList && uriList.trim()) {
-      const urls = uriList.split('\n').map(u => u.trim()).filter(u => u && !u.startsWith('#'));
-      if (urls.length > 0) {
-        emit('stage-files', { paths: urls, isUrl: true }).catch(console.error);
-        updateBadge(stagedCount + urls.length);
-        return;
-      }
-    }
-
-    // D. Check for plain text (dragged text selection or direct URL)
-    const plainText = dt.getData('text/plain');
-    if (plainText && plainText.trim()) {
-      const text = plainText.trim();
-      if (text.startsWith('http://') || text.startsWith('https://')) {
-        emit('stage-files', { paths: [text], isUrl: true }).catch(console.error);
-        updateBadge(stagedCount + 1);
-      } else {
-        emit('stage-text', { text }).catch(console.error);
-        updateBadge(stagedCount + 1);
-      }
+    if (payload.type === 'paths') {
+      handleDroppedPaths(payload.paths);
+    } else if (payload.type === 'image_url') {
+      emit('stage-files', { paths: [payload.url], isUrl: true, isImage: true }).catch(console.error);
+      updateBadge(stagedCount + 1);
+    } else if (payload.type === 'urls') {
+      emit('stage-files', { paths: payload.urls, isUrl: true }).catch(console.error);
+      updateBadge(stagedCount + payload.urls.length);
+    } else if (payload.type === 'text') {
+      emit('stage-text', { text: payload.text }).catch(console.error);
+      updateBadge(stagedCount + 1);
     }
   };
 
