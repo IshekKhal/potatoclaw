@@ -65,6 +65,27 @@ def extract_document_text(filename: str, file_bytes: bytes) -> str:
         except Exception as exc:
             return f"[DOCX extraction error: {exc}]"
 
+    # 2.5. Compressed Zip Archives
+    if lower_name.endswith(".zip"):
+        try:
+            with zipfile.ZipFile(io.BytesIO(file_bytes)) as z:
+                files_text = []
+                for info in z.infolist():
+                    if info.is_dir() or info.file_size > 100 * 1024:
+                        continue
+                    if any(info.filename.startswith(skip) for skip in (".git/", "node_modules/", "__pycache__/", ".venv/", "target/")):
+                        continue
+                    try:
+                        content = z.read(info.filename).decode("utf-8", errors="replace")
+                        files_text.append(f"--- File: {info.filename} ---\n{content}")
+                    except Exception:
+                        pass
+                if files_text:
+                    return f"[Zip Archive: {filename}]\n\n" + "\n\n".join(files_text[:30])
+                return f"[Zip Archive: {filename} contains no readable text files]"
+        except Exception as exc:
+            return f"[Zip extraction error: {exc}]"
+
     # 3. Known text, code, config, and script formats
     text_extensions = (
         ".txt", ".md", ".py", ".c", ".cpp", ".h", ".cs", ".java", ".rs", ".go",

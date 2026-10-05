@@ -295,6 +295,8 @@ document.addEventListener('DOMContentLoaded', () => {
         p.endsWith('.md')
       ) {
         icon = '📄';
+      } else if (item.type === 'folder' || (!p.includes('.') && item.path)) {
+        icon = '📁';
       } else {
         icon = '📦';
       }
@@ -430,12 +432,24 @@ document.addEventListener('DOMContentLoaded', () => {
     btnAttachFile.addEventListener('click', () => filePicker.click());
     filePicker.addEventListener('change', () => {
       Array.from(filePicker.files).forEach((file) => {
-        addStagedItem({
-          type: 'file',
-          name: file.name,
-          path: file.name,
-          meta: { size: file.size, mime: file.type },
-        });
+        const isImg = file.type.startsWith('image/');
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const content = e.target.result;
+          addStagedItem({
+            type: isImg ? 'image' : (file.name.endsWith('.csv') || file.name.endsWith('.tsv') ? 'tabular' : 'file'),
+            name: file.name,
+            path: null,
+            content: typeof content === 'string' && !isImg ? content : null,
+            dataUrl: isImg ? content : null,
+            meta: { size: file.size, mime: file.type },
+          });
+        };
+        if (isImg) {
+          reader.readAsDataURL(file);
+        } else {
+          reader.readAsText(file);
+        }
       });
       filePicker.value = '';
     });
@@ -825,13 +839,15 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // Compound context: attach clipboard text or referenced URLs into prompt
+    // Compound context: attach clipboard text, in-memory document content, or referenced URLs into prompt
     for (const item of stagedSnapshot) {
       const c = item.content || (item.meta && item.meta.content);
       if (item.type === 'clipboard' && c) {
         text = text ? `${text}\n\n[Clipboard Context]:\n${c}` : `[Clipboard Context]:\n${c}`;
       } else if (item.type === 'url') {
         text = text ? `${text}\n\n[Referenced URL]:\n${item.path || item.name}` : `[Referenced URL]:\n${item.path || item.name}`;
+      } else if (c && !item.path) {
+        text = text ? `${text}\n\n[Attached Document: ${item.name}]:\n${c}` : `[Attached Document: ${item.name}]:\n${c}`;
       }
     }
 
@@ -929,8 +945,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const fileName = filePath.replace(/^.*[\\\/]/, '');
         const lower = filePath.toLowerCase();
         const isImg = isImage || lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.webp') || lower.endsWith('.bmp') || lower.endsWith('.gif') || lower.endsWith('.svg');
+        const isTabular = lower.endsWith('.csv') || lower.endsWith('.tsv');
+        const isFolder = !fileName.includes('.');
         addStagedItem({
-          type: isImg ? 'image' : (isUrl ? 'url' : 'file'),
+          type: isImg ? 'image' : (isTabular ? 'tabular' : (isFolder ? 'folder' : (isUrl ? 'url' : 'file'))),
           name: fileName,
           path: filePath,
         });
@@ -1025,7 +1043,193 @@ document.addEventListener('DOMContentLoaded', () => {
         ramBadgeText.textContent = `Memory Shield: ${reclaimed} reclaimed`;
       }
     });
+
+    // 6. Native Tauri v2 onDragDropEvent directly on the HUD WebviewWindow
+    if (window.__TAURI__.webviewWindow && window.__TAURI__.webviewWindow.getCurrentWebviewWindow) {
+      try {
+        const currentWebview = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
+        currentWebview.onDragDropEvent((event) => {
+          const payload = event.payload;
+          if (!payload) return;
+          const hudContainer = document.querySelector('.hud-container');
+          if (payload.type === 'enter' || payload.type === 'over') {
+            if (hudContainer) hudContainer.classList.add('drag-over');
+          } else if (payload.type === 'leave') {
+            if (hudContainer) hudContainer.classList.remove('drag-over');
+          } else if (payload.type === 'drop') {
+            if (hudContainer) hudContainer.classList.remove('drag-over');
+            if (payload.paths && payload.paths.length > 0) {
+              payload.paths.forEach((filePath) => {
+                const fileName = filePath.replace(/^.*[\\\/]/, '');
+                const lower = filePath.toLowerCase();
+                const isImg = lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.webp') || lower.endsWith('.bmp') || lower.endsWith('.gif') || lower.endsWith('.svg');
+                const isTabular = lower.endsWith('.csv') || lower.endsWith('.tsv');
+                const isFolder = !fileName.includes('.');
+                addStagedItem({
+                  type: isImg ? 'image' : (isTabular ? 'tabular' : (isFolder ? 'folder' : 'file')),
+                  name: fileName,
+                  path: filePath,
+                });
+              });
+            }
+          }
+        }).catch(err => {
+          console.warn('HUD onDragDropEvent registration failed:', err);
+        });
+      } catch (err) {
+        console.warn('HUD getCurrentWebviewWindow error:', err);
+      }
+    }
   }
+
+  // 7. Universal HTML5 Drag and Drop for HUD Window (VS Code editor tabs, browser links/images, and text selections)
+  const extractHudDropPayload = (dt) => {
+    if (dt.files && dt.files.length > 0) {
+      const validPaths = [];
+      for (let i = 0; i < dt.files.length; i++) {
+        const f = dt.files[i];
+        if (f.path && (f.path.includes(':\\') || f.path.startsWith('/') || f.path.startsWith('\\\\'))) {
+          validPaths.push(f.path);
+        }
+      }
+      if (validPaths.length > 0) {
+        return { type: 'paths', paths: validPaths };
+      }
+    }
+
+    const uriList = dt.getData('text/uri-list');
+    if (uriList && uriList.trim()) {
+      const lines = uriList.split(/[\r\n]+/).map(s => s.trim()).filter(s => s && !s.startsWith('#'));
+      const localPaths = [];
+      const webUrls = [];
+      for (const u of lines) {
+        if (u.startsWith('file:///')) {
+          let clean = decodeURIComponent(u.replace(/^file:\/\/\//, '')).replace(/\//g, '\\');
+          localPaths.push(clean);
+        } else if (u.startsWith('http://') || u.startsWith('https://')) {
+          webUrls.push(u);
+        }
+      }
+      if (localPaths.length > 0) return { type: 'paths', paths: localPaths };
+      if (webUrls.length > 0) return { type: 'urls', urls: webUrls };
+    }
+
+    const html = dt.getData('text/html');
+    if (html) {
+      const imgMatch = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+      if (imgMatch && imgMatch[1]) {
+        let src = imgMatch[1].replace(/&amp;/g, '&');
+        if (src.startsWith('file:///')) {
+          let clean = decodeURIComponent(src.replace(/^file:\/\/\//, '')).replace(/\//g, '\\');
+          return { type: 'paths', paths: [clean] };
+        }
+        return { type: 'image_url', url: src };
+      }
+      const aMatch = html.match(/<a[^>]+href=["']([^"']+)["']/i);
+      if (aMatch && aMatch[1]) {
+        let href = aMatch[1].replace(/&amp;/g, '&');
+        if (href.startsWith('file:///')) {
+          let clean = decodeURIComponent(href.replace(/^file:\/\/\//, '')).replace(/\//g, '\\');
+          return { type: 'paths', paths: [clean] };
+        }
+        return { type: 'urls', urls: [href] };
+      }
+    }
+
+    const plainText = dt.getData('text/plain');
+    if (plainText && plainText.trim()) {
+      const trimmed = plainText.trim();
+      if (trimmed.startsWith('file:///')) {
+        let clean = decodeURIComponent(trimmed.replace(/^file:\/\/\//, '')).replace(/\//g, '\\');
+        return { type: 'paths', paths: [clean] };
+      }
+      const unquoted = trimmed.replace(/^["']|["']$/g, '');
+      if (/^[a-zA-Z]:\\/.test(unquoted) || unquoted.startsWith('\\\\')) {
+        return { type: 'paths', paths: [unquoted] };
+      }
+      if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+        return { type: 'urls', urls: [trimmed] };
+      }
+      return { type: 'text', text: trimmed };
+    }
+
+    return null;
+  };
+
+  const onHudDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    const hudContainer = document.querySelector('.hud-container');
+    if (hudContainer) hudContainer.classList.add('drag-over');
+  };
+
+  const onHudDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const hudContainer = document.querySelector('.hud-container');
+    if (hudContainer) hudContainer.classList.remove('drag-over');
+  };
+
+  const onHudDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const hudContainer = document.querySelector('.hud-container');
+    if (hudContainer) hudContainer.classList.remove('drag-over');
+
+    const dt = e.dataTransfer;
+    if (!dt) return;
+
+    const payload = extractHudDropPayload(dt);
+    if (!payload) return;
+
+    if (payload.type === 'paths') {
+      payload.paths.forEach((filePath) => {
+        const fileName = filePath.replace(/^.*[\\\/]/, '');
+        const lower = filePath.toLowerCase();
+        const isImg = lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.webp') || lower.endsWith('.bmp') || lower.endsWith('.gif') || lower.endsWith('.svg');
+        const isTabular = lower.endsWith('.csv') || lower.endsWith('.tsv');
+        const isFolder = !fileName.includes('.');
+        addStagedItem({
+          type: isImg ? 'image' : (isTabular ? 'tabular' : (isFolder ? 'folder' : 'file')),
+          name: fileName,
+          path: filePath,
+        });
+      });
+    } else if (payload.type === 'image_url') {
+      const fileName = payload.url.split('?')[0].split('/').pop() || 'image.png';
+      addStagedItem({
+        type: 'image',
+        name: fileName,
+        path: payload.url,
+      });
+    } else if (payload.type === 'urls') {
+      payload.urls.forEach(u => {
+        addStagedItem({
+          type: 'url',
+          name: u,
+          path: u,
+        });
+      });
+    } else if (payload.type === 'text') {
+      const preview = getFirstFewWords(payload.text);
+      addStagedItem({
+        type: 'clipboard',
+        name: `"${preview}"`,
+        path: null,
+        content: payload.text,
+        meta: { length: payload.text.length, content: payload.text },
+      });
+    }
+  };
+
+  ['dragenter', 'dragover'].forEach(type => {
+    window.addEventListener(type, onHudDragOver, false);
+  });
+  ['dragleave', 'dragend'].forEach(type => {
+    window.addEventListener(type, onHudDragLeave, false);
+  });
+  window.addEventListener('drop', onHudDrop, false);
 
   // Initial render
   renderStagedBadges();
