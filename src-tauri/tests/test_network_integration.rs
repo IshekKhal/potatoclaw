@@ -221,3 +221,30 @@ fn test_memory_shield_and_snip_regression() {
     let _ = fs::remove_file(path);
     println!("test_memory_shield_and_snip_regression PASSED.");
 }
+
+#[tokio::test]
+async fn test_directory_attachment_pipeline() {
+    let temp_dir = std::env::temp_dir().join(format!("test_dir_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis()));
+    let _ = fs::create_dir_all(&temp_dir);
+    let skill_file = temp_dir.join("SKILL.md");
+    fs::write(&skill_file, "# Test Skill\nThis is a test skill document.").expect("Failed to write test file");
+
+    let prompt = "Explain this test skill to me.".to_string();
+    let result = dispatch_process(
+        prompt,
+        "text".to_string(),
+        Some(temp_dir.to_string_lossy().to_string()),
+        None,
+        Some(BACKEND_URL.to_string()),
+        None,
+    )
+    .await;
+
+    let _ = fs::remove_dir_all(&temp_dir);
+
+    assert!(result.is_ok(), "Directory attachment must succeed without Access Denied: {:?}", result.err());
+    let json = result.unwrap();
+    assert_eq!(json.get("status").and_then(|s| s.as_str()), Some("success"));
+    println!("test_directory_attachment_pipeline PASSED.");
+}
+

@@ -14,8 +14,10 @@
 PotatoClaw is a native Windows desktop overlay built in Rust (Tauri v2) that protects memory-constrained PCs from lockups and freezes. When multitasking across browser tabs, IDEs, lab manuals, and PDFs, physical memory usage spikes past 90%. Windows drops into hard pagefile thrashing, freezing the desktop. 
 
 PotatoClaw addresses this with two components:
-1. **A local Win32 memory shield**: A floating desktop pill widget. Clicking it invokes native `K32EmptyWorkingSet` with active foreground process protection, releasing 1.7 GB to 3.5 GB of physical memory in 0.24 seconds without closing open applications or dropping unsaved work.
+1. **A local Win32 memory shield**: A floating desktop pill widget. Clicking it invokes native `K32EmptyWorkingSet` with active foreground process protection and a 60+ process whitelist, releasing 1.7 GB to 3.5 GB of physical memory in 0.24 seconds without closing open applications or dropping unsaved work.
 2. **An asynchronous cloud brain**: Heavy multimodal reasoning, screen snip OCR, tabular anomaly scanning, cross-session memory, and voice synthesis offload to a containerized FastAPI backend on Render. The local machine stays cool and draws under 35 MB of resident RAM.
+
+### Architecture Overview
 
 ```mermaid
 graph TD
@@ -23,7 +25,7 @@ graph TD
         UI["Desktop Pill & HUD Overlay<br/>(Lightweight WebView2 / <35 MB RAM)"]
         Shield["Memory Shield Engine<br/>(K32EmptyWorkingSet + Active PID Guard)"]
         GDI["Win32 GDI Screen Snipper<br/>(Alt+Shift+2 Crop to PNG)"]
-        Drop["Universal Ingestion Staging<br/>(PDF, DOCX, CSV, Code, Text)"]
+        Drop["Universal Ingestion Staging<br/>(PDF, DOCX, CSV, Folder, Zip)"]
         Settings["In-HUD Settings<br/>(Direct URL & Access Code Config)"]
     end
 
@@ -65,15 +67,15 @@ No installation wizard or administrative privileges required. Run `potatoclaw.ex
 
 ## Architecture & Core Modules
 
-* [`src-tauri/src/memory_shield.rs`](src-tauri/src/memory_shield.rs): Win32 process status FFI. Scans running processes, resolves active foreground window PID via `GetForegroundWindow` and `GetWindowThreadProcessId`, skips kernel PIDs (PID 0, PID 4), and calls `K32EmptyWorkingSet` to flush idle background pages to the Windows standby list.
+* [`src-tauri/src/memory_shield.rs`](src-tauri/src/memory_shield.rs): Win32 process status FFI. Scans running processes, resolves active foreground window PID via `GetForegroundWindow` and `GetWindowThreadProcessId`, filters against a 60+ process whitelist (`PROTECTED_PROCESS_NAMES`), skips kernel PIDs (PID 0, PID 4), and calls `K32EmptyWorkingSet` to flush idle background pages to the Windows standby list.
 * [`src-tauri/src/screen_capture.rs`](src-tauri/src/screen_capture.rs): Win32 GDI screen snipper using `CreateCompatibleDC` and `BitBlt`. Writes cropped rectangles directly to disk without spawning third-party tools.
-* [`src-tauri/src/network_gateway.rs`](src-tauri/src/network_gateway.rs): Native async reqwest client. Sends multipart payloads and authentication headers directly to the backend.
+* [`src-tauri/src/network_gateway.rs`](src-tauri/src/network_gateway.rs): Native async reqwest client with recursive directory traversal (`scan_directory_to_text`), multi-document attachment staging, and Access Code security authentication.
 * [`backend/app/services/gemma_brain.py`](backend/app/services/gemma_brain.py): Two-pass reasoning pipeline powered by Google DeepMind Gemma 4. Pass 1 generates explanations and code fixes; Pass 2 audits the answer against source errors to prevent hallucinations.
 * [`backend/app/services/tabpfn_engine.py`](backend/app/services/tabpfn_engine.py): Tabular outlier engine using Prior Labs TabPFN. Ingests CSV or TSV data and detects statistical anomalies in milliseconds.
-* [`backend/app/services/backboard_memory.py`](backend/app/services/backboard_memory.py): Server-side state and conversational context using Backboard.io.
+* [`backend/app/services/backboard_memory.py`](backend/app/services/backboard_memory.py): Server-side state and conversational context using Backboard.io with semantic recall query budgeting.
 * [`backend/app/services/elevenlabs_voice.py`](backend/app/services/elevenlabs_voice.py): Audio streaming client using ElevenLabs Turbo v2.5 (George voice) for verbal summaries.
 * [`backend/app/services/groq_stt.py`](backend/app/services/groq_stt.py): Fast speech transcription using Groq Whisper Large V3 Turbo.
-* [`ui/`](ui/): Frontend assets. Pure HTML, CSS, and vanilla JavaScript with zero Node.js build overhead.
+* [`ui/`](ui/): Frontend assets. Pure HTML, CSS, and vanilla JavaScript with multi-source drag-and-drop support (VS Code tabs, Explorer files, web URLs) and in-HUD Settings modal.
 
 ---
 
@@ -103,15 +105,18 @@ Once deployed, Render gives you a public URL (e.g. `https://your-app.onrender.co
 
 ## Hotkeys & Desktop Controls
 
-| Shortcut / Action | Target Window | Description |
+Registered natively via `tauri-plugin-global-shortcut`:
+
+| Shortcut / Action | Target | Description |
 |---|---|---|
-| `Alt+Shift+P` or `Alt+P+P` | HUD | Toggle the assistant HUD window |
-| `Alt+Shift+2` or `Alt+P+2` | Snipper | Activate full-screen crosshair to snip and stage an image |
-| `Alt+Shift+1` or `Alt+P+1` | Clipboard | Pull clipboard text or image directly into the active prompt |
-| `Alt+Shift+V` or `Alt+P+V` | Audio | Activate speech input via microphone |
+| `Alt+Shift+P` | HUD | Toggle the assistant HUD window |
+| `Alt+Shift+2` | Snipper | Activate full-screen crosshair to snip and stage a screen region |
+| `Alt+Shift+1` | Clipboard | Pull clipboard text or image directly into the active prompt |
+| `Alt+Shift+V` | Audio | Activate speech input via microphone |
+| `Esc` | Snipper | Dismiss screen snipper without saving |
 | Left-click pill | Pill | Toggle HUD visibility |
 | Double-click pill | Pill | Trigger instant safe Win32 memory trim |
-| Drag-and-drop onto pill | Pill | Stage PDF, DOCX, CSV, TSV, code, or images into context |
+| Drag-and-drop onto pill or HUD | Drop Target | Stage PDF, DOCX, CSV, TSV, code, folders, or zip archives |
 
 ---
 
@@ -173,7 +178,7 @@ Measured on an HP 15s (AMD Ryzen 3 3250U, 8 GB DDR4, 5.88 GB usable):
 
 ## Verified Free-Tier Ledger
 
-PotatoClaw is designed to be affordable for any student or independent developer:
+PotatoClaw operates entirely within permanent, verified free developer tiers:
 
 | Component | Service | Tier | Monthly Cost |
 |---|---|---|---|
